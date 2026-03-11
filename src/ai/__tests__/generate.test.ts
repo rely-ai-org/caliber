@@ -109,8 +109,8 @@ describe('buildGeneratePrompt', () => {
     expect(prompt).toContain('2 more rules omitted');
   });
 
-  it('limits config files to 8', () => {
-    const configFiles = Array.from({ length: 12 }, (_, i) => ({
+  it('limits config files to 15', () => {
+    const configFiles = Array.from({ length: 20 }, (_, i) => ({
       path: `config-${i}.json`,
       content: `{"index": ${i}}`,
     }));
@@ -123,8 +123,8 @@ describe('buildGeneratePrompt', () => {
     });
     const prompt = buildGeneratePrompt(fp, 'claude');
     expect(prompt).toContain('config-0.json');
-    expect(prompt).toContain('config-7.json');
-    expect(prompt).not.toContain('config-8.json');
+    expect(prompt).toContain('config-14.json');
+    expect(prompt).not.toContain('config-15.json');
   });
 
   it('limits API routes to 50', () => {

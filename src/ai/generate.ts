@@ -24,10 +24,12 @@ export async function generateSetup(
   fingerprint: Fingerprint,
   targetAgent: TargetAgent,
   prompt?: string,
-  callbacks?: GenerateCallbacks
+  callbacks?: GenerateCallbacks,
+  failingChecks?: FailingCheck[],
+  currentScore?: number,
 ): Promise<{ setup: Record<string, unknown> | null; explanation?: string; raw?: string }> {
   const provider = getProvider();
-  const userMessage = buildGeneratePrompt(fingerprint, targetAgent, prompt);
+  const userMessage = buildGeneratePrompt(fingerprint, targetAgent, prompt, failingChecks, currentScore);
 
   let attempt = 0;
 
@@ -138,13 +140,18 @@ export async function generateSetup(
   return attemptGeneration();
 }
 
+export interface FailingCheck {
+  name: string;
+  suggestion?: string;
+}
+
 const LIMITS = {
   FILE_TREE_ENTRIES: 200,
   EXISTING_CONFIG_CHARS: 8000,
   SKILLS_MAX: 10,
   SKILL_CHARS: 3000,
   RULES_MAX: 10,
-  CONFIG_FILES_MAX: 8,
+  CONFIG_FILES_MAX: 15,
   CONFIG_FILE_CHARS: 3000,
   ROUTES_MAX: 50,
   FILE_SUMMARIES_MAX: 60,
@@ -159,6 +166,8 @@ export function buildGeneratePrompt(
   fingerprint: Fingerprint,
   targetAgent: TargetAgent,
   prompt?: string,
+  failingChecks?: FailingCheck[],
+  currentScore?: number,
 ): string {
   const parts: string[] = [];
   const existing = fingerprint.existingConfigs;
@@ -169,7 +178,16 @@ export function buildGeneratePrompt(
     existing.cursorrules || existing.cursorRules?.length
   );
 
-  if (hasExistingConfigs) {
+  const isTargetedFix = failingChecks && failingChecks.length > 0 && currentScore !== undefined && currentScore >= 95;
+
+  if (isTargetedFix) {
+    parts.push(`TARGETED FIX MODE — current score: ${currentScore}/100, target: ${targetAgent}`);
+    parts.push(`\nThe existing config is already high quality. ONLY fix these specific failing checks:`);
+    for (const check of failingChecks) {
+      parts.push(`- ${check.name}${check.suggestion ? `: ${check.suggestion}` : ''}`);
+    }
+    parts.push(`\nIMPORTANT: Return the existing CLAUDE.md and skills with MINIMAL changes — only the edits needed to fix the above checks. Do NOT rewrite, restructure, rephrase, or make cosmetic changes. Preserve the existing content as-is except for targeted fixes.`);
+  } else if (hasExistingConfigs) {
     parts.push(`Audit and improve the existing coding agent configuration for target: ${targetAgent}`);
   } else {
     parts.push(`Generate an initial coding agent configuration for target: ${targetAgent}`);

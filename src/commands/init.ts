@@ -19,7 +19,8 @@ import { SpinnerMessages, GENERATION_MESSAGES, REFINE_MESSAGES } from '../utils/
 import { loadConfig } from '../llm/config.js';
 import { runInteractiveProviderSetup } from './interactive-provider-setup.js';
 import { computeLocalScore } from '../scoring/index.js';
-import { displayScoreDelta } from '../scoring/display.js';
+import { displayScore, displayScoreDelta } from '../scoring/display.js';
+import type { FailingCheck } from '../ai/generate.js';
 
 type TargetAgent = 'claude' | 'cursor' | 'both';
 
@@ -91,20 +92,46 @@ export async function initCommand(options: InitOptions) {
   // Baseline score before generation
   const baselineScore = computeLocalScore(process.cwd(), targetAgent);
 
-  // Get project description if empty directory
-  const isEmpty = fingerprint.fileTree.length < 3;
-  if (isEmpty) {
-    fingerprint.description = await promptInput('What will you build in this project?');
-  }
-
-  // Step 4: Generate setup via AI
   const hasExistingConfig = !!(
     fingerprint.existingConfigs.claudeMd || fingerprint.existingConfigs.claudeSettings ||
     fingerprint.existingConfigs.claudeSkills?.length ||
     fingerprint.existingConfigs.cursorrules || fingerprint.existingConfigs.cursorRules?.length
   );
 
-  if (hasExistingConfig) {
+  // Score gating: skip generation if already perfect, targeted fix if close
+  if (hasExistingConfig && baselineScore.score === 100) {
+    console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Score check\n'));
+    displayScore(baselineScore);
+    console.log(chalk.bold.green('  Your setup is already optimal — nothing to change.\n'));
+    console.log(chalk.dim('  Run `caliber init --force` to regenerate anyway.\n'));
+    if (!options.force) return;
+  }
+
+  // Get project description if empty directory
+  const isEmpty = fingerprint.fileTree.length < 3;
+  if (isEmpty) {
+    fingerprint.description = await promptInput('What will you build in this project?');
+  }
+
+  // Determine if this should be a targeted fix (score >= 95 with existing configs)
+  let failingChecks: FailingCheck[] | undefined;
+  let currentScore: number | undefined;
+
+  if (hasExistingConfig && baselineScore.score >= 95 && !options.force) {
+    failingChecks = baselineScore.checks
+      .filter(c => !c.passed && c.maxPoints > 0)
+      .map(c => ({ name: c.name, suggestion: c.suggestion }));
+    currentScore = baselineScore.score;
+
+    if (failingChecks.length > 0) {
+      console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Targeted fixes\n'));
+      console.log(chalk.dim(`  Score is ${baselineScore.score}/100 — only fixing ${failingChecks.length} remaining issue${failingChecks.length === 1 ? '' : 's'}:\n`));
+      for (const check of failingChecks) {
+        console.log(chalk.dim(`    • ${check.name}`));
+      }
+      console.log('');
+    }
+  } else if (hasExistingConfig) {
     console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Auditing your configs\n'));
     console.log(chalk.dim('  AI is reviewing your existing configs against your codebase'));
     console.log(chalk.dim('  and suggesting improvements.\n'));
@@ -134,7 +161,9 @@ export async function initCommand(options: InitOptions) {
           genMessages.stop();
           genSpinner.fail(`Generation error: ${error}`);
         },
-      }
+      },
+      failingChecks,
+      currentScore,
     );
 
     if (!generatedSetup) {

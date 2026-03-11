@@ -10,8 +10,10 @@ const IGNORE_DIRS = new Set([
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.py']);
 
 const CONFIG_FILE_NAMES = new Set([
+  'package.json',
   'Dockerfile', 'docker-compose.yml', 'docker-compose.yaml',
   'Makefile', 'tsconfig.json', 'pyproject.toml', 'turbo.json',
+  'requirements.txt', 'go.mod', 'Cargo.toml', 'Gemfile',
   'next.config.js', 'next.config.mjs', 'next.config.ts',
   'vite.config.ts', 'vite.config.js', 'vite.config.mjs',
   'drizzle.config.ts', 'drizzle.config.js',
