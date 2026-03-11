@@ -46,10 +46,10 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim('  what\'s stale, and adding what\'s missing.\n'));
 
   console.log(chalk.bold('  How it works:\n'));
-  console.log(chalk.dim('  1. Scan      Analyze your code, dependencies, and file structure'));
-  console.log(chalk.dim('  2. Generate  AI creates config files tailored to your project'));
-  console.log(chalk.dim('  3. Review    You accept, refine, or decline the generated setup'));
-  console.log(chalk.dim('  4. Apply     Config files are written to your project\n'));
+  console.log(chalk.dim('  1. Scan      Analyze your code, dependencies, and existing configs'));
+  console.log(chalk.dim('  2. Generate  AI creates or improves config files for your project'));
+  console.log(chalk.dim('  3. Review    You accept, refine, or decline the proposed changes'));
+  console.log(chalk.dim('  4. Apply     Config files are written with backups\n'));
 
   // Step 1: Check LLM config
   console.log(chalk.hex('#6366f1').bold('  Step 1/4 — Check LLM provider\n'));
@@ -67,7 +67,7 @@ export async function initCommand(options: InitOptions) {
 
   // Step 2: Collect fingerprint
   console.log(chalk.hex('#6366f1').bold('  Step 2/4 — Scan project\n'));
-  console.log(chalk.dim('  Detecting languages, frameworks, file structure, and existing configs.\n'));
+  console.log(chalk.dim('  Detecting languages, dependencies, file structure, and existing configs.\n'));
   const spinner = ora('Analyzing project...').start();
   const fingerprint = collectFingerprint(process.cwd());
   await enrichFingerprintWithLLM(fingerprint, process.cwd());
@@ -89,16 +89,21 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Step 4: Generate setup via AI
-  console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Auditing your configs\n'));
-  console.log(chalk.dim('  AI is auditing your CLAUDE.md, skills, and rules against your'));
-  console.log(chalk.dim('  project\'s actual codebase and conventions.\n'));
-  console.log(chalk.dim('  This usually takes 1–3 minutes on first run.\n'));
-
   const hasExistingConfig = !!(
     fingerprint.existingConfigs.claudeMd || fingerprint.existingConfigs.claudeSettings ||
     fingerprint.existingConfigs.claudeSkills?.length ||
     fingerprint.existingConfigs.cursorrules || fingerprint.existingConfigs.cursorRules?.length
   );
+
+  if (hasExistingConfig) {
+    console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Auditing your configs\n'));
+    console.log(chalk.dim('  AI is reviewing your existing configs against your codebase'));
+    console.log(chalk.dim('  and suggesting improvements.\n'));
+  } else {
+    console.log(chalk.hex('#6366f1').bold('  Step 3/4 — Generating configs\n'));
+    console.log(chalk.dim('  AI is creating agent config files tailored to your project.\n'));
+  }
+  console.log(chalk.dim('  This usually takes 1–3 minutes.\n'));
 
   const genStartTime = Date.now();
   const genSpinner = ora('Generating setup...').start();

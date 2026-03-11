@@ -6,6 +6,7 @@ import { generateSetup } from '../ai/generate.js';
 import { writeSetup } from '../writers/index.js';
 import { readManifest } from '../writers/manifest.js';
 import { loadConfig } from '../llm/config.js';
+import { readState } from '../lib/state.js';
 import { SpinnerMessages, GENERATION_MESSAGES } from '../utils/spinner-messages.js';
 
 export async function regenerateCommand(options: { dryRun?: boolean }) {
@@ -32,9 +33,10 @@ export async function regenerateCommand(options: { dryRun?: boolean }) {
   let generatedSetup: Record<string, unknown> | null = null;
 
   try {
+    const targetAgent = readState()?.targetAgent ?? 'both';
     const result = await generateSetup(
       fingerprint,
-      'both',
+      targetAgent,
       undefined,
       {
         onStatus: (status) => { genMessages.handleServerStatus(status); },

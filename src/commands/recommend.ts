@@ -1,6 +1,6 @@
 import chalk from 'chalk';
 import ora from 'ora';
-import { mkdirSync, writeFileSync } from 'fs';
+import { mkdirSync, readFileSync, existsSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { collectFingerprint } from '../fingerprint/index.js';
 import { scanLocalState } from '../scanner/index.js';
@@ -65,6 +65,17 @@ async function searchSkills(technologies: string[]): Promise<SkillResult[]> {
   return results;
 }
 
+function extractTopDeps(): string[] {
+  const pkgPath = join(process.cwd(), 'package.json');
+  if (!existsSync(pkgPath)) return [];
+  try {
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
+    return Object.keys(pkg.dependencies ?? {});
+  } catch {
+    return [];
+  }
+}
+
 export async function recommendCommand(options: {
   generate?: boolean;
   status?: string;
@@ -72,13 +83,14 @@ export async function recommendCommand(options: {
   const fingerprint = collectFingerprint(process.cwd());
   const platforms = detectLocalPlatforms();
 
-  const technologies = [
+  const technologies = [...new Set([
     ...fingerprint.languages,
     ...fingerprint.frameworks,
-  ].filter(Boolean);
+    ...extractTopDeps(),
+  ].filter(Boolean))];
 
   if (technologies.length === 0) {
-    console.log(chalk.yellow('Could not detect any languages or frameworks. Try running from a project root.'));
+    console.log(chalk.yellow('Could not detect any languages or dependencies. Try running from a project root.'));
     throw new Error('__exit__');
   }
 
