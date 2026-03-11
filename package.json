@@ -1,6 +1,6 @@
 {
   "name": "@rely-ai/caliber",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Open-source CLI for configuring coding agent environments (CLAUDE.md, .cursorrules, skills). Bring your own LLM.",
   "type": "module",
   "bin": {
