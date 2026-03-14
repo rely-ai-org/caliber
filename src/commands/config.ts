@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import { loadConfig, getConfigFilePath, getFastModel } from '../llm/config.js';
 import { runInteractiveProviderSetup } from './interactive-provider-setup.js';
+import { trackConfigProviderSet } from '../telemetry/events.js';
 
 export async function configCommand() {
   const existing = loadConfig();
@@ -39,6 +40,9 @@ export async function configCommand() {
   }
 
   await runInteractiveProviderSetup();
+
+  const updated = loadConfig();
+  if (updated) trackConfigProviderSet(updated.provider);
 
   console.log(chalk.green('\n✓ Configuration saved'));
   console.log(chalk.dim(`  ${getConfigFilePath()}\n`));

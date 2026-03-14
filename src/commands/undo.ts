@@ -1,6 +1,7 @@
 import chalk from 'chalk';
 import ora from 'ora';
 import { undoSetup } from '../writers/index.js';
+import { trackUndoExecuted } from '../telemetry/events.js';
 
 export function undoCommand() {
   const spinner = ora('Reverting setup...').start();
@@ -13,6 +14,7 @@ export function undoCommand() {
       return;
     }
 
+    trackUndoExecuted();
     spinner.succeed('Setup reverted successfully.\n');
 
     if (restored.length > 0) {

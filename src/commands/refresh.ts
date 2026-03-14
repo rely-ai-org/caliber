@@ -11,6 +11,7 @@ import { collectFingerprint } from '../fingerprint/index.js';
 import { refreshDocs } from '../ai/refresh.js';
 import { loadConfig } from '../llm/config.js';
 import { validateModel } from '../llm/index.js';
+import { trackRefreshCompleted } from '../telemetry/events.js';
 
 interface RefreshOptions {
   quiet?: boolean;
@@ -98,6 +99,7 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
   }
 
   const written = writeRefreshDocs(response.updatedDocs);
+  trackRefreshCompleted(written.length, Date.now());
   spinner?.succeed(`${prefix}Updated ${written.length} doc${written.length === 1 ? '' : 's'}`);
 
   for (const file of written) {

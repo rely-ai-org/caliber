@@ -7,6 +7,7 @@ import { collectFingerprint, Fingerprint } from '../fingerprint/index.js';
 import { scanLocalState } from '../scanner/index.js';
 import { llmJsonCall } from '../llm/index.js';
 import { loadConfig, getFastModel } from '../llm/config.js';
+import { trackSkillsInstalled } from '../telemetry/events.js';
 
 type Platform = 'claude' | 'cursor' | 'codex';
 
@@ -629,6 +630,7 @@ async function installSkills(recs: SkillResult[], platforms: Platform[], content
   }
 
   if (installed.length > 0) {
+    trackSkillsInstalled(installed.length);
     spinner.succeed(`Installed ${installed.length} file${installed.length > 1 ? 's' : ''}`);
     for (const p of installed) {
       console.log(chalk.green(`  ✓ ${p}`));

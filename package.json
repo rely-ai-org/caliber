@@ -25,7 +25,8 @@
     "glob": "^11.0.0",
     "google-auth-library": "^9.0.0",
     "openai": "^4.0.0",
-    "ora": "^8.1.0"
+    "ora": "^8.1.0",
+    "posthog-node": "^5.28.2"
   },
   "files": [
     "dist/**/*.js",

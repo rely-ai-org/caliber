@@ -14,6 +14,7 @@ import { computeLocalScore } from '../scoring/index.js';
 import { displayScoreSummary, displayScoreDelta } from '../scoring/display.js';
 import { SpinnerMessages, GENERATION_MESSAGES } from '../utils/spinner-messages.js';
 import { collectSetupFiles } from './setup-files.js';
+import { trackRegenerateCompleted } from '../telemetry/events.js';
 
 export async function regenerateCommand(options: { dryRun?: boolean }) {
   const config = loadConfig();
@@ -178,6 +179,7 @@ export async function regenerateCommand(options: { dryRun?: boolean }) {
 
   displayScoreDelta(baselineScore, afterScore);
 
+  trackRegenerateCompleted(action, Date.now());
   console.log(chalk.bold.green('  Regeneration complete!'));
   console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber undo') + chalk.dim(' to revert changes.\n'));
 }

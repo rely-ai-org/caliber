@@ -18,6 +18,8 @@ import {
   learnRemoveCommand,
   learnStatusCommand,
 } from './commands/learn.js';
+import { setTelemetryDisabled } from './telemetry/config.js';
+import { initTelemetry, trackEvent } from './telemetry/index.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -31,7 +33,52 @@ const displayVersion = process.env.CALIBER_LOCAL ? `${pkg.version}-local` : pkg.
 program
   .name(process.env.CALIBER_LOCAL ? 'caloc' : 'caliber')
   .description('Configure your coding agent environment')
-  .version(displayVersion);
+  .version(displayVersion)
+  .option('--no-traces', 'Disable anonymous telemetry for this run');
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function tracked<T extends (...args: any[]) => any>(commandName: string, handler: T): T {
+  const wrapper = async (...args: Parameters<T>) => {
+    const start = Date.now();
+    trackEvent('command_started', {
+      command: commandName,
+      cli_version: pkg.version,
+    });
+    try {
+      await handler(...args);
+      trackEvent('command_completed', {
+        command: commandName,
+        duration_ms: Date.now() - start,
+        success: true,
+      });
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+      const errorType = err instanceof Error ? err.constructor.name : typeof err;
+      if (errorMessage !== '__exit__') {
+        trackEvent('command_error', {
+          command: commandName,
+          error_type: errorType,
+          error_message: errorMessage,
+        });
+      }
+      trackEvent('command_completed', {
+        command: commandName,
+        duration_ms: Date.now() - start,
+        success: false,
+      });
+      throw err;
+    }
+  };
+  return wrapper as unknown as T;
+}
+
+program.hook('preAction', (thisCommand) => {
+  const opts = thisCommand.optsWithGlobals();
+  if (opts.traces === false) {
+    setTelemetryDisabled(true);
+  }
+  initTelemetry();
+});
 
 function parseAgentOption(value: string): ('claude' | 'cursor' | 'codex')[] {
   if (value === 'both') return ['claude', 'cursor'];
@@ -52,18 +99,18 @@ program
   .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
   .option('--dry-run', 'Preview changes without writing files')
   .option('--force', 'Overwrite existing setup without prompting')
-  .action(initCommand);
+  .action(tracked('onboard', initCommand));
 
 program
   .command('undo')
   .description('Revert all config changes made by Caliber')
-  .action(undoCommand);
+  .action(tracked('undo', undoCommand));
 
 program
   .command('status')
   .description('Show current Caliber setup status')
   .option('--json', 'Output as JSON')
-  .action(statusCommand);
+  .action(tracked('status', statusCommand));
 
 program
   .command('regenerate')
@@ -71,17 +118,17 @@ program
   .alias('re')
   .description('Re-analyze project and regenerate setup')
   .option('--dry-run', 'Preview changes without writing files')
-  .action(regenerateCommand);
+  .action(tracked('regenerate', regenerateCommand));
 
 program
   .command('config')
   .description('Configure LLM provider, API key, and model')
-  .action(configCommand);
+  .action(tracked('config', configCommand));
 
 program
   .command('skills')
   .description('Discover and install community skills for your project')
-  .action(recommendCommand);
+  .action(tracked('skills', recommendCommand));
 
 program
   .command('score')
@@ -89,21 +136,21 @@ program
   .option('--json', 'Output as JSON')
   .option('--quiet', 'One-line output for scripts/hooks')
   .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
-  .action(scoreCommand);
+  .action(tracked('score', scoreCommand));
 
 program
   .command('refresh')
   .description('Update docs based on recent code changes')
   .option('--quiet', 'Suppress output (for use in hooks)')
   .option('--dry-run', 'Preview changes without writing files')
-  .action(refreshCommand);
+  .action(tracked('refresh', refreshCommand));
 
 program
   .command('hooks')
   .description('Manage auto-refresh hooks (toggle interactively)')
   .option('--install', 'Enable all hooks non-interactively')
   .option('--remove', 'Disable all hooks non-interactively')
-  .action(hooksCommand);
+  .action(tracked('hooks', hooksCommand));
 
 // [In Development] Session learning — not yet ready for public use.
 // The command is functional but hidden from help output.
@@ -115,26 +162,26 @@ learn
   .command('observe')
   .description('Record a tool event from stdin (called by hooks)')
   .option('--failure', 'Mark event as a tool failure')
-  .action(learnObserveCommand);
+  .action(tracked('learn:observe', learnObserveCommand));
 
 learn
   .command('finalize')
   .description('Analyze session events and update CLAUDE.md (called on SessionEnd)')
-  .action(learnFinalizeCommand);
+  .action(tracked('learn:finalize', learnFinalizeCommand));
 
 learn
   .command('install')
   .description('Install learning hooks into .claude/settings.json')
-  .action(learnInstallCommand);
+  .action(tracked('learn:install', learnInstallCommand));
 
 learn
   .command('remove')
   .description('Remove learning hooks from .claude/settings.json')
-  .action(learnRemoveCommand);
+  .action(tracked('learn:remove', learnRemoveCommand));
 
 learn
   .command('status')
   .description('Show learning system status')
-  .action(learnStatusCommand);
+  .action(tracked('learn:status', learnStatusCommand));
 
 export { program };

@@ -3,6 +3,7 @@ import { computeLocalScore } from '../scoring/index.js';
 import type { TargetAgent } from '../scoring/index.js';
 import { displayScore } from '../scoring/display.js';
 import { readState } from '../lib/state.js';
+import { trackScoreComputed } from '../telemetry/events.js';
 
 interface ScoreOptions {
   json?: boolean;
@@ -14,6 +15,7 @@ export async function scoreCommand(options: ScoreOptions) {
   const dir = process.cwd();
   const target = options.agent ?? readState()?.targetAgent;
   const result = computeLocalScore(dir, target);
+  trackScoreComputed(result.score, target);
 
   if (options.json) {
     console.log(JSON.stringify(result, null, 2));

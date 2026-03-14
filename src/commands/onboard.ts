@@ -25,6 +25,20 @@ import { readDismissedChecks, writeDismissedChecks } from '../scoring/dismissed.
 import type { DismissedCheck } from '../scoring/dismissed.js';
 import { searchAndInstallSkills } from './recommend.js';
 import type { FailingCheck, PassingCheck } from '../ai/generate.js';
+import {
+  trackInitProviderSelected,
+  trackInitProjectDiscovered,
+  trackInitAgentSelected,
+  trackInitScoreComputed,
+  trackInitGenerationStarted,
+  trackInitGenerationCompleted,
+  trackInitReviewAction,
+  trackInitRefinementRound,
+  trackInitFilesWritten,
+  trackInitHookSelected,
+  trackInitSkillsSearch,
+  trackInitScoreRegression,
+} from '../telemetry/events.js';
 
 type TargetAgent = ('claude' | 'cursor' | 'codex')[];
 
@@ -79,6 +93,7 @@ export async function initCommand(options: InitOptions) {
     }
     console.log(chalk.green('  ✓ Provider saved. Let\'s continue.\n'));
   }
+  trackInitProviderSelected(config.provider, config.model);
   const displayModel = config.model === 'default' && config.provider === 'claude-cli'
     ? process.env.ANTHROPIC_MODEL || 'default (inherited from Claude Code)'
     : config.model;
@@ -98,11 +113,13 @@ export async function initCommand(options: InitOptions) {
   const fingerprint = await collectFingerprint(process.cwd());
   spinner.succeed('Project analyzed');
 
+  trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
   console.log(chalk.dim(`  Languages: ${fingerprint.languages.join(', ') || 'none detected'}`));
   console.log(chalk.dim(`  Files: ${fingerprint.fileTree.length} found\n`));
 
   // Step 3: Determine target agent
   const targetAgent = options.agent || await promptAgent();
+  trackInitAgentSelected(targetAgent);
 
   // Evaluate which failing checks aren't applicable to this project
   const preScore = computeLocalScore(process.cwd(), targetAgent);
@@ -120,6 +137,8 @@ export async function initCommand(options: InitOptions) {
   // Baseline score (after dismissals applied)
   const baselineScore = computeLocalScore(process.cwd(), targetAgent);
   displayScoreSummary(baselineScore);
+  const passingCount = baselineScore.checks.filter(c => c.passed).length;
+  const failingCount = baselineScore.checks.filter(c => !c.passed).length;
 
   const hasExistingConfig = !!(
     fingerprint.existingConfigs.claudeMd || fingerprint.existingConfigs.claudeSettings ||
@@ -133,6 +152,7 @@ export async function initCommand(options: InitOptions) {
 
   // Score gating: skip generation if already perfect, targeted fix if close
   if (hasExistingConfig && baselineScore.score === 100) {
+    trackInitScoreComputed(baselineScore.score, passingCount, failingCount, true);
     console.log(chalk.bold.green('  Your setup is already optimal — nothing to change.\n'));
     console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber onboard --force') + chalk.dim(' to regenerate anyway.\n'));
     if (!options.force) return;
@@ -141,6 +161,8 @@ export async function initCommand(options: InitOptions) {
   // If the only failing checks are non-LLM-fixable, skip generation and show actionable hints
   const allFailingChecks = baselineScore.checks.filter(c => !c.passed && c.maxPoints > 0);
   const llmFixableChecks = allFailingChecks.filter(c => !NON_LLM_CHECKS.has(c.id));
+
+  trackInitScoreComputed(baselineScore.score, passingCount, failingCount, false);
 
   if (hasExistingConfig && llmFixableChecks.length === 0 && allFailingChecks.length > 0 && !options.force) {
     console.log(chalk.bold.green('\n  Your config is fully optimized for LLM generation.\n'));
@@ -193,6 +215,7 @@ export async function initCommand(options: InitOptions) {
   }
   console.log(chalk.dim('  This can take a couple of minutes depending on your model and provider.\n'));
 
+  trackInitGenerationStarted(!!failingChecks);
   const genStartTime = Date.now();
   const genSpinner = ora('Generating setup...').start();
   const genMessages = new SpinnerMessages(genSpinner, GENERATION_MESSAGES, { showElapsedTime: true });
@@ -242,6 +265,7 @@ export async function initCommand(options: InitOptions) {
   }
 
   const elapsedMs = Date.now() - genStartTime;
+  trackInitGenerationCompleted(elapsedMs, 0);
   const mins = Math.floor(elapsedMs / 60000);
   const secs = Math.floor((elapsedMs % 60000) / 1000);
   const timeStr = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
@@ -278,10 +302,14 @@ export async function initCommand(options: InitOptions) {
     }
 
     action = await promptReviewAction();
+    trackInitReviewAction(action, wantsReview ? 'reviewed' : 'skipped');
   }
 
+  let refinementRound = 0;
   while (action === 'refine') {
+    refinementRound++;
     generatedSetup = await refineLoop(generatedSetup, targetAgent, sessionHistory);
+    trackInitRefinementRound(refinementRound, !!generatedSetup);
     if (!generatedSetup) {
       cleanupStaging();
       console.log(chalk.dim('Refinement cancelled. No files were modified.'));
@@ -293,6 +321,7 @@ export async function initCommand(options: InitOptions) {
     printSetupSummary(generatedSetup);
     await openReview('terminal', restaged.stagedFiles);
     action = await promptReviewAction();
+    trackInitReviewAction(action, 'terminal');
   }
 
   cleanupStaging();
@@ -313,6 +342,12 @@ export async function initCommand(options: InitOptions) {
   try {
     const result = writeSetup(generatedSetup as unknown as Parameters<typeof writeSetup>[0]);
     writeSpinner.succeed('Config files written');
+    trackInitFilesWritten(
+      result.written.length + result.deleted.length,
+      result.written.length,
+      0,
+      result.deleted.length,
+    );
 
     console.log(chalk.bold('\nFiles created/updated:'));
     for (const file of result.written) {
@@ -349,6 +384,7 @@ export async function initCommand(options: InitOptions) {
   console.log(title.bold('  Keep your configs fresh\n'));
   console.log(chalk.dim('  Caliber can automatically update your agent configs when your code changes.\n'));
   const hookChoice = await promptHookType(targetAgent);
+  trackInitHookSelected(hookChoice);
 
   if (hookChoice === 'claude' || hookChoice === 'both') {
     const hookResult = installHook();
@@ -389,6 +425,7 @@ export async function initCommand(options: InitOptions) {
 
   // Guard: if score regressed, auto-undo
   if (afterScore.score < baselineScore.score) {
+    trackInitScoreRegression(baselineScore.score, afterScore.score);
     console.log('');
     console.log(chalk.yellow(`  Score would drop from ${baselineScore.score} to ${afterScore.score} — reverting changes.`));
     try {
@@ -416,6 +453,7 @@ export async function initCommand(options: InitOptions) {
   });
 
   if (wantsSkills) {
+    trackInitSkillsSearch(true, 0);
     try {
       await searchAndInstallSkills();
     } catch (err) {
@@ -425,6 +463,7 @@ export async function initCommand(options: InitOptions) {
       console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber skills') + chalk.dim(' later to try again.\n'));
     }
   } else {
+    trackInitSkillsSearch(false, 0);
     console.log(chalk.dim('  Skipped. Run ') + chalk.hex('#83D1EB')('caliber skills') + chalk.dim(' later to browse.\n'));
   }
 
