@@ -15,7 +15,7 @@ function promptInput(question: string): Promise<string> {
 }
 
 const PROVIDER_CHOICES: Array<{ name: string; value: ProviderType }> = [
-  { name: 'Claude Code (use my app login — Pro/Max/Team, no API key)', value: 'claude-cli' },
+  { name: 'Claude Code — Use my Claude Code subscription', value: 'claude-cli' },
   { name: 'Cursor (use my Cursor subscription — no API key)', value: 'cursor' },
   { name: 'Anthropic (Claude) — API key from console.anthropic.com', value: 'anthropic' },
   { name: 'Google Vertex AI (Claude)', value: 'vertex' },

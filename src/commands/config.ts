@@ -1,14 +1,22 @@
 import chalk from 'chalk';
-import { loadConfig, getConfigFilePath } from '../llm/config.js';
+import { loadConfig, getConfigFilePath, getFastModel } from '../llm/config.js';
 import { runInteractiveProviderSetup } from './interactive-provider-setup.js';
 
 export async function configCommand() {
   const existing = loadConfig();
 
   if (existing) {
+    const displayModel = existing.model === 'default' && existing.provider === 'claude-cli'
+      ? process.env.ANTHROPIC_MODEL || 'default (inherited from Claude Code)'
+      : existing.model;
+    const fastModel = getFastModel();
+
     console.log(chalk.bold('\nCurrent Configuration\n'));
     console.log(`  Provider: ${chalk.cyan(existing.provider)}`);
-    console.log(`  Model:    ${chalk.cyan(existing.model)}`);
+    console.log(`  Model:    ${chalk.cyan(displayModel)}`);
+    if (fastModel) {
+      console.log(`  Scan:     ${chalk.cyan(fastModel)}`);
+    }
     if (existing.apiKey) {
       const masked = existing.apiKey.slice(0, 8) + '...' + existing.apiKey.slice(-4);
       console.log(`  API Key:  ${chalk.dim(masked)}`);
