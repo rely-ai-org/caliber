@@ -105,9 +105,11 @@ program
   .option('--remove', 'Disable all hooks non-interactively')
   .action(hooksCommand);
 
+// [In Development] Session learning — not yet ready for public use.
+// The command is functional but hidden from help output.
 const learn = program
-  .command('learn')
-  .description('Session learning — observe tool usage and extract reusable instructions');
+  .command('learn', { hidden: true })
+  .description('[dev] Session learning — observe tool usage and extract reusable instructions');
 
 learn
   .command('observe')

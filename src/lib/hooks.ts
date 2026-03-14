@@ -104,7 +104,8 @@ const PRECOMMIT_END = '# caliber:pre-commit:end';
 
 const PRECOMMIT_BLOCK = `${PRECOMMIT_START}
 if command -v caliber >/dev/null 2>&1; then
-  caliber refresh --quiet 2>/dev/null || true
+  echo "\\033[2mcaliber: refreshing docs...\\033[0m"
+  caliber refresh 2>/dev/null || true
   git diff --name-only -- CLAUDE.md .claude/ .cursor/ AGENTS.md 2>/dev/null | xargs git add 2>/dev/null || true
 fi
 ${PRECOMMIT_END}`;
