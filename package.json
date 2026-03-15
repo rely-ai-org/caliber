@@ -1,6 +1,6 @@
 {
   "name": "@rely-ai/caliber",
-  "version": "1.12.18",
+  "version": "1.13.0",
   "description": "Analyze your codebase and generate optimized AI agent configs (CLAUDE.md, .cursorrules, skills) — no API key needed",
   "type": "module",
   "bin": {
