@@ -10,4 +10,4 @@
 
 - [ ] `npm run test` passes
 - [ ] `npx tsc --noEmit` passes
-- [ ] Tested manually with `caliber onboard` / `caliber score`
+- [ ] Tested manually with `caliber init` / `caliber score`

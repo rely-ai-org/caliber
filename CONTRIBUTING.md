@@ -25,7 +25,7 @@ npm run build    # Compile
 
 | Directory | Purpose |
 |-----------|---------|
-| `src/commands/` | CLI commands (onboard, score, skills, etc.) |
+| `src/commands/` | CLI commands (init, score, skills, etc.) |
 | `src/ai/` | LLM-powered generation, refinement, detection |
 | `src/llm/` | Multi-provider LLM layer (Anthropic, Vertex, OpenAI, Claude CLI, Cursor) |
 | `src/fingerprint/` | Project analysis (languages, deps, file tree) |

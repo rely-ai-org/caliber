@@ -31,7 +31,7 @@ const result = await llmJsonCall<{ frameworks: string[] }>({
 
 ## Streaming
 
-For streaming generation (like `caliber onboard`), use the provider directly:
+For streaming generation (like `caliber init`), use the provider directly:
 
 ```typescript
 import { getProvider } from '../llm/index.js';

@@ -25,7 +25,7 @@ const PROVIDER_CHOICES: Array<{ name: string; value: ProviderType }> = [
 /**
  * Interactive provider selection and setup. Prompts for provider choice and any
  * required inputs (API key, project ID, etc.), writes config to disk, and returns the config.
- * Used by both `caliber config` and by `caliber onboard` on first run (no config yet).
+ * Used by both `caliber config` and by `caliber init` on first run (no config yet).
  */
 export async function runInteractiveProviderSetup(options?: {
   selectMessage?: string;

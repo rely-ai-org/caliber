@@ -24,7 +24,7 @@ npx vitest run src/scoring/__tests__/accuracy.test.ts  # Single file
 
 **AI** (`src/ai/`): `generate.ts` (streaming init) · `refine.ts` (chat refinement) · `refresh.ts` (diff-based updates) · `learn.ts` (session analysis) · `detect.ts` (LLM framework detection) · `prompts.ts` (all system prompts)
 
-**Commands** (`src/commands/`): `onboard` (alias `init`), `regenerate` (alias `regen`/`re`), `status`, `undo`, `config`, `skills`, `score`, `refresh`, `hooks`, `learn`
+**Commands** (`src/commands/`): `init`, `regenerate` (alias `regen`/`re`), `status`, `undo`, `config`, `skills`, `score`, `refresh`, `hooks`, `learn`
 
 **Fingerprint** (`src/fingerprint/`): `git.ts` · `file-tree.ts` · `existing-config.ts` · `code-analysis.ts` · `index.ts` (orchestrates, LLM enrichment built-in)
 

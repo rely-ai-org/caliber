@@ -2,7 +2,7 @@ import { Command } from 'commander';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initCommand } from './commands/onboard.js';
+import { initCommand } from './commands/init.js';
 import { undoCommand } from './commands/undo.js';
 import { statusCommand } from './commands/status.js';
 import { regenerateCommand } from './commands/regenerate.js';
@@ -93,14 +93,13 @@ function parseAgentOption(value: string): ('claude' | 'cursor' | 'codex')[] {
 }
 
 program
-  .command('onboard')
-  .alias('init')
-  .description('Onboard your project for AI-assisted development')
+  .command('init')
+  .description('Initialize your project for AI-assisted development')
   .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
   .option('--dry-run', 'Preview changes without writing files')
   .option('--force', 'Overwrite existing setup without prompting')
   .option('--debug-report', undefined, false)
-  .action(tracked('onboard', initCommand));
+  .action(tracked('init', initCommand));
 
 program
   .command('undo')

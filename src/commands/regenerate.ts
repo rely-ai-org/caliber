@@ -25,7 +25,7 @@ export async function regenerateCommand(options: { dryRun?: boolean }) {
 
   const manifest = readManifest();
   if (!manifest) {
-    console.log(chalk.yellow('No existing setup found. Run ') + chalk.hex('#83D1EB')('caliber onboard') + chalk.yellow(' first.'));
+    console.log(chalk.yellow('No existing setup found. Run ') + chalk.hex('#83D1EB')('caliber init') + chalk.yellow(' first.'));
     throw new Error('__exit__');
   }
 
@@ -173,7 +173,7 @@ export async function regenerateCommand(options: { dryRun?: boolean }) {
         console.log(chalk.dim(`  Reverted ${restored.length + removed.length} file${restored.length + removed.length === 1 ? '' : 's'} from backup.`));
       }
     } catch { /* best effort */ }
-    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber onboard --force') + chalk.dim(' to override.\n'));
+    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber init --force') + chalk.dim(' to override.\n'));
     return;
   }
 

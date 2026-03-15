@@ -27,7 +27,7 @@ export async function statusCommand(options: { json?: boolean }) {
 
   if (!manifest) {
     console.log(`  Setup: ${chalk.dim('No setup applied')}`);
-    console.log(chalk.dim('\n  Run ') + chalk.hex('#83D1EB')('caliber onboard') + chalk.dim(' to get started.\n'));
+    console.log(chalk.dim('\n  Run ') + chalk.hex('#83D1EB')('caliber init') + chalk.dim(' to get started.\n'));
     return;
   }
 

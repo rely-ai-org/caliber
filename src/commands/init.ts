@@ -63,7 +63,7 @@ export async function initCommand(options: InitOptions) {
   ╚██████╗██║  ██║███████╗██║██████╔╝███████╗██║  ██║
    ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
   `));
-  console.log(chalk.dim('  Onboard your project for AI-assisted development\n'));
+  console.log(chalk.dim('  Initialize your project for AI-assisted development\n'));
 
   console.log(title.bold('  Welcome to Caliber\n'));
   console.log(chalk.dim('  Caliber analyzes your codebase and creates tailored config files'));
@@ -71,7 +71,7 @@ export async function initCommand(options: InitOptions) {
 
   const report = options.debugReport ? new DebugReport() : null;
 
-  console.log(title.bold('  How onboarding works:\n'));
+  console.log(title.bold('  How it works:\n'));
   console.log(chalk.dim('  1. Connect    Set up your LLM provider'));
   console.log(chalk.dim('  2. Discover   Analyze your code, dependencies, and structure'));
   console.log(chalk.dim('  3. Generate   Create config files tailored to your project'));
@@ -183,7 +183,7 @@ export async function initCommand(options: InitOptions) {
   if (hasExistingConfig && baselineScore.score === 100) {
     trackInitScoreComputed(baselineScore.score, passingCount, failingCount, true);
     console.log(chalk.bold.green('  Your setup is already optimal — nothing to change.\n'));
-    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber onboard --force') + chalk.dim(' to regenerate anyway.\n'));
+    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber init --force') + chalk.dim(' to regenerate anyway.\n'));
     if (!options.force) return;
   }
 
@@ -203,7 +203,7 @@ export async function initCommand(options: InitOptions) {
       }
     }
     console.log('');
-    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber onboard --force') + chalk.dim(' to regenerate anyway.\n'));
+    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber init --force') + chalk.dim(' to regenerate anyway.\n'));
     return;
   }
 
@@ -474,7 +474,7 @@ export async function initCommand(options: InitOptions) {
         console.log(chalk.dim(`  Reverted ${restored.length + removed.length} file${restored.length + removed.length === 1 ? '' : 's'} from backup.`));
       }
     } catch { /* best effort */ }
-    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber onboard --force') + chalk.dim(' to override.\n'));
+    console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber init --force') + chalk.dim(' to override.\n'));
     return;
   }
 
@@ -513,7 +513,7 @@ export async function initCommand(options: InitOptions) {
     console.log(chalk.dim('  Skipped. Run ') + chalk.hex('#83D1EB')('caliber skills') + chalk.dim(' later to browse.\n'));
   }
 
-  console.log(chalk.bold.green('  Onboarding complete! Your project is ready for AI-assisted development.'));
+  console.log(chalk.bold.green('  Setup complete! Your project is ready for AI-assisted development.'));
   console.log(chalk.dim('  Run ') + chalk.hex('#83D1EB')('caliber undo') + chalk.dim(' to revert changes.\n'));
 
   console.log(chalk.bold('  Next steps:\n'));

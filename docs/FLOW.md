@@ -1,9 +1,9 @@
-# Caliber: Install and onboard flow
+# Caliber: Install and init flow
 
 ## How users run Caliber
 
-- **Global install:** `npm install -g @rely-ai/caliber` then `caliber onboard` or `caliber config`
-- **npx (no install):** `npx @rely-ai/caliber onboard` or `npx @rely-ai/caliber config`
+- **Global install:** `npm install -g @rely-ai/caliber` then `caliber init` or `caliber config`
+- **npx (no install):** `npx @rely-ai/caliber init` or `npx @rely-ai/caliber config`
 
 ---
 
@@ -16,19 +16,19 @@ Caliber installed successfully!
 
   Get started:
     caliber config   Set up LLM: Cursor (your seat), Anthropic, OpenAI, or Vertex
-    caliber onboard     Analyze your project and generate agent configs
+    caliber init     Analyze your project and generate agent configs
 
   Use your current seat: choose "Claude Code" or "Cursor" in caliber config (or set CALIBER_USE_CLAUDE_CLI=1 / CALIBER_USE_CURSOR_SEAT=1).
-  Or set ANTHROPIC_API_KEY / OPENAI_API_KEY and run caliber onboard.
+  Or set ANTHROPIC_API_KEY / OPENAI_API_KEY and run caliber init.
 ```
 
-So the flow is: **install → postinstall message → user runs `caliber config` or sets env → user runs `caliber onboard`**.
+So the flow is: **install → postinstall message → user runs `caliber config` or sets env → user runs `caliber init`**.
 
-With **npx**, there is no postinstall (npx runs the binary from cache). The user goes straight to `npx @caliber-ai/caliber onboard`; if no LLM is configured, init prints the same options and exits.
+With **npx**, there is no postinstall (npx runs the binary from cache). The user goes straight to `npx @caliber-ai/caliber init`; if no LLM is configured, init prints the same options and exits.
 
 ---
 
-## 2. LLM config resolution (when `caliber onboard` or any command needs an LLM)
+## 2. LLM config resolution (when `caliber init` or any command needs an LLM)
 
 `loadConfig()` in `src/llm/config.ts` is used. Order:
 
@@ -44,12 +44,12 @@ With **npx**, there is no postinstall (npx runs the binary from cache). The user
 
 So a user can:
 
-- Run **`caliber config`** once, choose e.g. **Cursor** or **Anthropic**, and from then on `caliber onboard` uses `~/.caliber/config.json` (unless env vars override).
+- Run **`caliber config`** once, choose e.g. **Cursor** or **Anthropic**, and from then on `caliber init` uses `~/.caliber/config.json` (unless env vars override).
 - Or **skip config** and set `ANTHROPIC_API_KEY` / `OPENAI_API_KEY` / `CALIBER_USE_CURSOR_SEAT=1` in the shell; init then works with no config file.
 
 ---
 
-## 3. `caliber onboard` step-by-step
+## 3. `caliber init` step-by-step
 
 1. **Step 1 — Check LLM**  
    `loadConfig()`. If `null`, print:

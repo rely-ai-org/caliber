@@ -37,7 +37,7 @@ Caliber **generates, audits, and maintains** your agentic development sessions.
 ## 🚀 Quick Start
 
 ```bash
-npx @rely-ai/caliber onboard
+npx @rely-ai/caliber init
 ```
 
 That's it. On first run, Caliber walks you through provider setup interactively.
@@ -46,20 +46,20 @@ Or install globally:
 
 ```bash
 npm install -g @rely-ai/caliber
-caliber onboard
+caliber init
 ```
 
 > **Already have an API key?** Skip the interactive setup:
 >
 > ```bash
 > export ANTHROPIC_API_KEY=sk-ant-...
-> npx @rely-ai/caliber onboard
+> npx @rely-ai/caliber init
 > ```
 
 ## ⚙️ How It Works
 
 ```
-caliber onboard
+caliber init
 │
 ├─ 1. 🔌 Connect      Choose your LLM provider — Claude Code seat, Cursor seat,
 │                      or an API key (Anthropic, OpenAI, Vertex AI)
@@ -112,7 +112,7 @@ Every change Caliber makes is reversible:
 
 | Command              | Description                                          |
 | -------------------- | ---------------------------------------------------- |
-| `caliber onboard`    | 🏁 Onboard your project — full 6-step wizard         |
+| `caliber init`       | 🏁 Initialize your project — full 6-step wizard      |
 | `caliber score`      | 📊 Score your config quality (deterministic, no LLM) |
 | `caliber skills`     | 🧩 Discover and install community skills             |
 | `caliber regenerate` | 🔄 Re-analyze and regenerate your setup              |
@@ -125,15 +125,15 @@ Every change Caliber makes is reversible:
 ### Examples
 
 ```bash
-# Onboarding
-caliber onboard                      # Interactive — picks agent, walks through setup
-caliber onboard --agent claude       # Target Claude Code only
-caliber onboard --agent cursor       # Target Cursor only
-caliber onboard --agent codex        # Target OpenAI Codex only
-caliber onboard --agent all          # Target all three
-caliber onboard --agent claude,cursor # Comma-separated
-caliber onboard --dry-run            # Preview without writing files
-caliber onboard --force              # Overwrite existing setup without prompting
+# Initialize
+caliber init                      # Interactive — picks agent, walks through setup
+caliber init --agent claude       # Target Claude Code only
+caliber init --agent cursor       # Target Cursor only
+caliber init --agent codex        # Target OpenAI Codex only
+caliber init --agent all          # Target all three
+caliber init --agent claude,cursor # Comma-separated
+caliber init --dry-run            # Preview without writing files
+caliber init --force              # Overwrite existing setup without prompting
 
 # Scoring
 caliber score                        # Full breakdown with grade (A-F)

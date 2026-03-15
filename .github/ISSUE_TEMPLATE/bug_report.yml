@@ -15,7 +15,7 @@ body:
       label: Steps to reproduce
       description: How can we reproduce this?
       placeholder: |
-        1. Run `caliber onboard`
+        1. Run `caliber init`
         2. Select Claude Code
         3. ...
     validations:
