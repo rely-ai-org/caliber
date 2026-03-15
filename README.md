@@ -10,6 +10,10 @@
 
 <p align="center"><strong>Improve your agentic development experience with one command</strong></p>
 
+<p align="center">
+  <img src="assets/demo.gif" alt="Caliber demo" width="640">
+</p>
+
 ---
 
 Caliber scans your project — languages, frameworks, dependencies, file structure — and generates tailored config files for **Claude Code**, **Cursor**, and **OpenAI Codex**. If configs already exist, it audits them against your actual codebase and suggests targeted improvements.
