@@ -99,6 +99,7 @@ program
   .option('--dry-run', 'Preview changes without writing files')
   .option('--force', 'Overwrite existing setup without prompting')
   .option('--debug-report', undefined, false)
+  .option('--show-tokens', 'Show token usage summary at the end')
   .action(tracked('init', initCommand));
 
 program

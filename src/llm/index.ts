@@ -13,6 +13,8 @@ export type { LLMStreamOptions, LLMStreamCallbacks, ProviderType } from './types
 export { loadConfig, writeConfigFile, getConfigFilePath, getFastModel } from './config.js';
 export { parseJsonResponse, extractJson, estimateTokens };
 export { isModelNotAvailableError, handleModelNotAvailable } from './model-recovery.js';
+export { trackUsage, getUsageSummary, resetUsage } from './usage.js';
+export type { TokenUsage } from './types.js';
 
 let cachedProvider: LLMProvider | null = null;
 let cachedConfig: LLMConfig | null = null;

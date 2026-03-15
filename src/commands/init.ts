@@ -17,7 +17,7 @@ import { installLearningHooks } from '../lib/learning-hooks.js';
 import { writeState, getCurrentHeadSha } from '../lib/state.js';
 import { SpinnerMessages, GENERATION_MESSAGES, REFINE_MESSAGES } from '../utils/spinner-messages.js';
 import { loadConfig, getFastModel } from '../llm/config.js';
-import { llmJsonCall, validateModel } from '../llm/index.js';
+import { llmJsonCall, validateModel, getUsageSummary } from '../llm/index.js';
 import { runInteractiveProviderSetup } from './interactive-provider-setup.js';
 import { computeLocalScore } from '../scoring/index.js';
 import type { Check } from '../scoring/index.js';
@@ -50,6 +50,7 @@ interface InitOptions {
   dryRun?: boolean;
   force?: boolean;
   debugReport?: boolean;
+  showTokens?: boolean;
 }
 
 export async function initCommand(options: InitOptions) {
@@ -265,6 +266,7 @@ export async function initCommand(options: InitOptions) {
 
   let generatedSetup: Record<string, unknown> | null = null;
   let rawOutput: string | undefined;
+  let genStopReason: string | undefined;
 
   try {
     const result = await generateSetup(
@@ -288,10 +290,12 @@ export async function initCommand(options: InitOptions) {
       generatedSetup = result.setup;
       rawOutput = result.raw;
     }
+    genStopReason = result.stopReason;
   } catch (err) {
     genMessages.stop();
     const msg = err instanceof Error ? err.message : 'Unknown error';
     genSpinner.fail(`Generation failed: ${msg}`);
+    writeErrorLog(config, undefined, msg, 'exception');
     throw new Error('__exit__');
   }
 
@@ -299,6 +303,7 @@ export async function initCommand(options: InitOptions) {
 
   if (!generatedSetup) {
     genSpinner.fail('Failed to generate setup.');
+    writeErrorLog(config, rawOutput, undefined, genStopReason);
     if (rawOutput) {
       console.log(chalk.dim('\nRaw LLM output (JSON parse failed):'));
       console.log(chalk.dim(rawOutput.slice(0, 500)));
@@ -573,6 +578,10 @@ export async function initCommand(options: InitOptions) {
   console.log(`    ${title('caliber skills')}         Discover community skills for your stack`);
   console.log(`    ${title('caliber undo')}         Revert all changes from this run`);
   console.log('');
+
+  if (options.showTokens) {
+    displayTokenUsage();
+  }
 
   if (report) {
     report.markStep('Finished');
@@ -899,5 +908,55 @@ function ensurePermissions(): void {
 
   if (!fs.existsSync('.claude')) fs.mkdirSync('.claude', { recursive: true });
   fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
+}
+
+function displayTokenUsage(): void {
+  const summary = getUsageSummary();
+  if (summary.length === 0) return;
+
+  console.log(chalk.bold('  Token usage:\n'));
+  let totalIn = 0;
+  let totalOut = 0;
+  for (const m of summary) {
+    totalIn += m.inputTokens;
+    totalOut += m.outputTokens;
+    const cacheInfo = m.cacheReadTokens > 0 || m.cacheWriteTokens > 0
+      ? chalk.dim(` (cache: ${m.cacheReadTokens.toLocaleString()} read, ${m.cacheWriteTokens.toLocaleString()} write)`)
+      : '';
+    console.log(`    ${chalk.dim(m.model)}: ${m.inputTokens.toLocaleString()} in / ${m.outputTokens.toLocaleString()} out  (${m.calls} call${m.calls === 1 ? '' : 's'})${cacheInfo}`);
+  }
+  if (summary.length > 1) {
+    console.log(`    ${chalk.dim('Total')}: ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out`);
+  }
+  console.log('');
+}
+
+function writeErrorLog(
+  config: { provider: string; model: string },
+  rawOutput: string | undefined,
+  error?: string,
+  stopReason?: string,
+): void {
+  try {
+    const logPath = path.join(process.cwd(), '.caliber', 'error-log.md');
+    const lines = [
+      `# Generation Error — ${new Date().toISOString()}`,
+      '',
+      `**Provider**: ${config.provider}`,
+      `**Model**: ${config.model}`,
+      `**Stop reason**: ${stopReason || 'unknown'}`,
+      '',
+    ];
+    if (error) {
+      lines.push('## Error', '```', error, '```', '');
+    }
+    lines.push('## Raw LLM Output', '```', rawOutput || '(empty)', '```');
+
+    fs.mkdirSync(path.join(process.cwd(), '.caliber'), { recursive: true });
+    fs.writeFileSync(logPath, lines.join('\n'));
+    console.log(chalk.dim(`\n  Error log written to .caliber/error-log.md`));
+  } catch {
+    // best effort
+  }
 }
 

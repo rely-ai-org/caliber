@@ -1,5 +1,6 @@
 import Anthropic from '@anthropic-ai/sdk';
-import type { LLMProvider, LLMCallOptions, LLMStreamOptions, LLMStreamCallbacks, LLMConfig } from './types.js';
+import type { LLMProvider, LLMCallOptions, LLMStreamOptions, LLMStreamCallbacks, LLMConfig, TokenUsage } from './types.js';
+import { trackUsage } from './usage.js';
 
 export class AnthropicProvider implements LLMProvider {
   private client: Anthropic;
@@ -17,6 +18,17 @@ export class AnthropicProvider implements LLMProvider {
       system: [{ type: 'text', text: options.system, cache_control: { type: 'ephemeral' } }],
       messages: [{ role: 'user', content: options.prompt }],
     });
+
+    const model = options.model || this.defaultModel;
+    if (response.usage) {
+      const u = response.usage as unknown as Record<string, number>;
+      trackUsage(model, {
+        inputTokens: u.input_tokens ?? 0,
+        outputTokens: u.output_tokens ?? 0,
+        cacheReadTokens: u.cache_read_input_tokens,
+        cacheWriteTokens: u.cache_creation_input_tokens,
+      });
+    }
 
     const block = response.content[0];
     return block.type === 'text' ? block.text : '';
@@ -50,12 +62,25 @@ export class AnthropicProvider implements LLMProvider {
     });
 
     let stopReason: string | undefined;
+    let usage: TokenUsage | undefined;
+    const model = options.model || this.defaultModel;
 
     stream.on('message', (message) => {
-      stopReason = (message as unknown as Record<string, unknown>).stop_reason as string | undefined;
+      const msg = message as unknown as Record<string, unknown>;
+      stopReason = msg.stop_reason as string | undefined;
+      const u = msg.usage as Record<string, number> | undefined;
+      if (u) {
+        usage = {
+          inputTokens: u.input_tokens ?? 0,
+          outputTokens: u.output_tokens ?? 0,
+          cacheReadTokens: u.cache_read_input_tokens,
+          cacheWriteTokens: u.cache_creation_input_tokens,
+        };
+        trackUsage(model, usage);
+      }
     });
     stream.on('text', (text) => callbacks.onText(text));
-    stream.on('end', () => callbacks.onEnd({ stopReason }));
+    stream.on('end', () => callbacks.onEnd({ stopReason, usage }));
     stream.on('error', (error) => callbacks.onError(error));
   }
 }

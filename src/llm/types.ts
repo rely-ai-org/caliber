@@ -18,9 +18,16 @@ export interface LLMCallOptions {
   maxTokens?: number;
 }
 
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
 export interface LLMStreamCallbacks {
   onText: (text: string) => void;
-  onEnd: (meta?: { stopReason?: string }) => void;
+  onEnd: (meta?: { stopReason?: string; usage?: TokenUsage }) => void;
   onError: (error: Error) => void;
 }
 

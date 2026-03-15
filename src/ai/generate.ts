@@ -29,13 +29,13 @@ export async function generateSetup(
   failingChecks?: FailingCheck[],
   currentScore?: number,
   passingChecks?: PassingCheck[],
-): Promise<{ setup: Record<string, unknown> | null; explanation?: string; raw?: string }> {
+): Promise<{ setup: Record<string, unknown> | null; explanation?: string; raw?: string; stopReason?: string }> {
   const provider = getProvider();
   const userMessage = buildGeneratePrompt(fingerprint, targetAgent, prompt, failingChecks, currentScore, passingChecks);
 
   let attempt = 0;
 
-  const attemptGeneration = async (): Promise<{ setup: Record<string, unknown> | null; explanation?: string; raw?: string }> => {
+  const attemptGeneration = async (): Promise<{ setup: Record<string, unknown> | null; explanation?: string; raw?: string; stopReason?: string }> => {
     attempt++;
 
     const maxTokensForAttempt = Math.min(
@@ -117,9 +117,9 @@ export async function generateSetup(
 
             if (setup) {
               if (callbacks) callbacks.onComplete(setup, explanation);
-              resolve({ setup, explanation });
+              resolve({ setup, explanation, stopReason: stopReason ?? undefined });
             } else {
-              resolve({ setup: null, explanation, raw: preJsonBuffer });
+              resolve({ setup: null, explanation, raw: preJsonBuffer, stopReason: stopReason ?? undefined });
             }
           },
           onError: (error) => {
@@ -129,12 +129,12 @@ export async function generateSetup(
               return;
             }
             if (callbacks) callbacks.onError(error.message);
-            resolve({ setup: null, raw: error.message });
+            resolve({ setup: null, raw: error.message, stopReason: 'error' });
           },
         }
       ).catch((error: Error) => {
         if (callbacks) callbacks.onError(error.message);
-        resolve({ setup: null, raw: error.message });
+        resolve({ setup: null, raw: error.message, stopReason: 'error' });
       });
     });
   };
