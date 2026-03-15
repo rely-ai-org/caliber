@@ -339,6 +339,47 @@ export async function initCommand(options: InitOptions) {
     report.addJson('Generation: Parsed Setup', generatedSetup);
   }
 
+  // Inline polish: score the generated content and fix if needed, all before user review.
+  // We need files on disk for scoring, so we do a pre-write, score, polish, then let
+  // the normal staging flow handle the diff presentation.
+  {
+    const preWriteResult = writeSetup(generatedSetup as unknown as Parameters<typeof writeSetup>[0]);
+    const inlineScore = computeLocalScore(process.cwd(), targetAgent);
+
+    if (inlineScore.score < 100) {
+      const inlineFailingChecks = inlineScore.checks
+        .filter(c => !c.passed && c.maxPoints > 0)
+        .filter(c => !NON_LLM_CHECKS.has(c.id));
+
+      if (inlineFailingChecks.length > 0) {
+        genSpinner.text = 'Polishing generated setup...';
+        log(options.verbose, `Inline polish: score ${inlineScore.score}/100, fixing ${inlineFailingChecks.length} checks`);
+
+        try {
+          const polishResult = await generateSetup(
+            fingerprint, targetAgent, undefined,
+            { onStatus: () => {}, onComplete: () => {}, onError: () => {} },
+            inlineFailingChecks.map(c => ({ name: c.name, suggestion: c.suggestion })),
+            inlineScore.score,
+            inlineScore.checks.filter(c => c.passed).map(c => ({ name: c.name })),
+            { skipSkills: true, forceTargetedFix: true },
+          );
+
+          if (polishResult.setup) {
+            generatedSetup = polishResult.setup;
+            writeSetup(generatedSetup as unknown as Parameters<typeof writeSetup>[0]);
+            log(options.verbose, 'Inline polish applied');
+          }
+        } catch {
+          log(options.verbose, 'Inline polish failed, continuing with original');
+        }
+      }
+    }
+
+    // Undo the pre-write so the staging diff shows the real delta from original files
+    try { undoSetup(); } catch { /* best effort — backup restores originals */ }
+  }
+
   const elapsedMs = Date.now() - genStartTime;
   trackInitGenerationCompleted(elapsedMs, 0);
   const mins = Math.floor(elapsedMs / 60000);
@@ -507,58 +548,7 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Show score improvement
-  let afterScore = computeLocalScore(process.cwd(), targetAgent);
-
-  // Score polish: if not 100, attempt one targeted fix pass
-  if (afterScore.score < 100) {
-    const polishFailingChecks = afterScore.checks
-      .filter(c => !c.passed && c.maxPoints > 0)
-      .filter(c => !NON_LLM_CHECKS.has(c.id));
-
-    if (polishFailingChecks.length > 0) {
-      console.log('');
-      console.log(chalk.dim(`  Score: ${afterScore.score}/100 — polishing ${polishFailingChecks.length} remaining check${polishFailingChecks.length === 1 ? '' : 's'}...`));
-      if (options.verbose) {
-        for (const c of polishFailingChecks) {
-          log(options.verbose, `  Polish target: ${c.name}${c.suggestion ? ` — ${c.suggestion}` : ''}`);
-        }
-      }
-
-      const polishFailing: FailingCheck[] = polishFailingChecks.map(c => ({
-        name: c.name,
-        suggestion: c.suggestion,
-      }));
-      const polishPassing: PassingCheck[] = afterScore.checks
-        .filter(c => c.passed)
-        .map(c => ({ name: c.name }));
-
-      try {
-        const polishResult = await generateSetup(
-          fingerprint,
-          targetAgent,
-          undefined,
-          {
-            onStatus: () => {},
-            onComplete: () => {},
-            onError: () => {},
-          },
-          polishFailing,
-          afterScore.score,
-          polishPassing,
-          { skipSkills: true, forceTargetedFix: true },
-        );
-
-        if (polishResult.setup) {
-          const polishWriteResult = writeSetup(polishResult.setup as unknown as Parameters<typeof writeSetup>[0]);
-          if (polishWriteResult.written.length > 0) {
-            afterScore = computeLocalScore(process.cwd(), targetAgent);
-          }
-        }
-      } catch {
-        // Polish failed — continue with current score
-      }
-    }
-  }
+  const afterScore = computeLocalScore(process.cwd(), targetAgent);
 
   // Guard: if score regressed, auto-undo
   if (afterScore.score < baselineScore.score) {
