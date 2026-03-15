@@ -90,7 +90,7 @@ SCORING CRITERIA — your output is scored deterministically. Optimize for 100/1
 Existence (25 pts):
 - CLAUDE.md exists (6 pts) — always generate for claude/both targets
 - AGENTS.md exists (6 pts) — always generate for codex target (serves as primary instructions file)
-- Skills configured (8 pts) — generate exactly 3 focused skills for full points (6 base + 1 per extra, cap 2). Two skills = 7 pts, three = 8 pts.
+- Skills configured (8 pts) — generate at least 3 skills for full points. Generate more if the project has multiple distinct tools, frameworks, or workflows that benefit from dedicated skills.
 - MCP servers mentioned (3 pts) — reference detected MCP integrations
 - For "both" target: .cursorrules/.cursor/rules/ exist (3+3 pts), cross-platform parity (2 pts)
 
@@ -124,7 +124,7 @@ Bonus (5 pts):
 
 OUTPUT SIZE CONSTRAINTS — these are critical:
 - CLAUDE.md / AGENTS.md: MUST be under 100 lines for maximum score. Aim for 70-90 lines. Be extremely concise — only commands, architecture overview, and key conventions. Use bullet points and tables, not prose.
-- Skills: generate exactly 3 skills per target platform. Only go above 3 for large multi-framework projects.
+- Skills: generate 3-6 skills per target platform based on project complexity. Each skill should cover a distinct tool, workflow, or domain — don't pad with generic skills.
 - Each skill content: max 150 lines. Focus on patterns and examples, not exhaustive docs.
 - Cursor rules: max 5 .mdc files.
 - If the project is large, prioritize depth on the 3-4 most critical tools over breadth across everything.`;
@@ -183,7 +183,7 @@ CoreSetup schema:
 }
 
 IMPORTANT: Do NOT generate full skill content. Only output skill topic names and descriptions.
-Skills will be generated separately. Generate exactly 3 skill topics per target platform.
+Skills will be generated separately. Generate 3-6 skill topics per target platform based on project complexity. Each topic should cover a distinct tool, workflow, or domain.
 
 Skill topic description MUST include WHAT it does + WHEN to use it with specific trigger phrases.
 Example: "Manages database migrations. Use when user says 'run migration', 'create migration', 'db schema change', or modifies files in db/migrations/."
@@ -224,7 +224,7 @@ Bonus (5 pts): Hooks (2 pts), AGENTS.md (1 pt), OpenSkills format (2 pts) — ha
 OUTPUT SIZE CONSTRAINTS:
 - CLAUDE.md / AGENTS.md: MUST be under 100 lines. Aim for 70-90 lines.
 - Cursor rules: max 5 .mdc files.
-- Skill topics: exactly 3 per platform (name + description only, no content).`;
+- Skill topics: 3-6 per platform based on project complexity (name + description only, no content).`;
 
 export const SKILL_GENERATION_PROMPT = `You generate a single skill file for a coding agent (Claude Code, Cursor, or Codex).
 
