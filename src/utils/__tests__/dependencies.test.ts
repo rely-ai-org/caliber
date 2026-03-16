@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
+import { normalize } from 'path';
 import {
   extractNpmDeps,
   extractPythonDeps,
@@ -13,9 +14,13 @@ vi.mock('fs');
 const mockFs = vi.mocked(fs);
 
 function setupFs(files: Record<string, string>) {
+  const normalized: Record<string, string> = {};
+  for (const [k, v] of Object.entries(files)) {
+    normalized[normalize(k)] = v;
+  }
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   mockFs.readFileSync.mockImplementation(((path: fs.PathLike) => {
-    const content = files[String(path)];
+    const content = normalized[String(path)];
     if (content === undefined) throw new Error(`ENOENT: ${path}`);
     return content;
   }) as any);
