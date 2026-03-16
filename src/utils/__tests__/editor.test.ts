@@ -7,8 +7,6 @@ import { detectAvailableEditors, openDiffsInEditor } from '../editor.js';
 
 const IS_WINDOWS = process.platform === 'win32';
 const whichCmd = IS_WINDOWS ? 'where' : 'which';
-const expectedSpawnOpts = (base: Record<string, unknown>) =>
-  IS_WINDOWS ? { ...base, shell: true } : base;
 
 describe('detectAvailableEditors', () => {
   beforeEach(() => {
@@ -63,11 +61,18 @@ describe('openDiffsInEditor', () => {
       { originalPath: '/project/CLAUDE.md', proposedPath: '/tmp/proposed/CLAUDE.md' },
     ]);
 
-    expect(spawn).toHaveBeenCalledWith(
-      'cursor',
-      ['--diff', '/project/CLAUDE.md', '/tmp/proposed/CLAUDE.md'],
-      expectedSpawnOpts({ stdio: 'ignore', detached: true })
-    );
+    if (IS_WINDOWS) {
+      expect(spawn).toHaveBeenCalledWith(
+        'cursor --diff "/project/CLAUDE.md" "/tmp/proposed/CLAUDE.md"',
+        { shell: true, stdio: 'ignore', detached: true }
+      );
+    } else {
+      expect(spawn).toHaveBeenCalledWith(
+        'cursor',
+        ['--diff', '/project/CLAUDE.md', '/tmp/proposed/CLAUDE.md'],
+        { stdio: 'ignore', detached: true }
+      );
+    }
     expect(mockUnref).toHaveBeenCalled();
   });
 
@@ -76,11 +81,18 @@ describe('openDiffsInEditor', () => {
       { proposedPath: '/tmp/proposed/new.md' },
     ]);
 
-    expect(spawn).toHaveBeenCalledWith(
-      'code',
-      ['/tmp/proposed/new.md'],
-      expectedSpawnOpts({ stdio: 'ignore', detached: true })
-    );
+    if (IS_WINDOWS) {
+      expect(spawn).toHaveBeenCalledWith(
+        'code "/tmp/proposed/new.md"',
+        { shell: true, stdio: 'ignore', detached: true }
+      );
+    } else {
+      expect(spawn).toHaveBeenCalledWith(
+        'code',
+        ['/tmp/proposed/new.md'],
+        { stdio: 'ignore', detached: true }
+      );
+    }
   });
 
   it('continues on error for individual files', () => {

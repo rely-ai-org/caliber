@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClaudeCliProvider, isClaudeCliAvailable } from '../claude-cli.js';
 import type { LLMConfig } from '../types.js';
 
+const IS_WINDOWS = process.platform === 'win32';
 const spawn = vi.fn();
 const execSync = vi.fn();
 
@@ -45,13 +46,18 @@ describe('ClaudeCliProvider', () => {
 
     const result = await resultPromise;
     expect(result).toBe('Hello from Claude.');
-    expect(spawn).toHaveBeenCalledWith(
-      'claude',
-      expect.arrayContaining(['-p']),
-      expect.objectContaining({ cwd: process.cwd() })
-    );
-    const args = spawn.mock.calls[0][1];
-    expect(args).not.toContain(expect.stringContaining('[[System]]'));
+    if (IS_WINDOWS) {
+      expect(spawn.mock.calls[0][0]).toBe('claude -p');
+      expect(spawn.mock.calls[0][1]).toEqual(expect.objectContaining({ cwd: process.cwd(), shell: true }));
+    } else {
+      expect(spawn).toHaveBeenCalledWith(
+        'claude',
+        expect.arrayContaining(['-p']),
+        expect.objectContaining({ cwd: process.cwd() })
+      );
+      const args = spawn.mock.calls[0][1];
+      expect(args).not.toContain(expect.stringContaining('[[System]]'));
+    }
     expect(stdinEnd).toHaveBeenCalledWith(expect.stringContaining('You are helpful.'));
     expect(stdinEnd).toHaveBeenCalledWith(expect.stringContaining('Say hello.'));
   });
@@ -115,9 +121,15 @@ describe('ClaudeCliProvider', () => {
     closeCb!(0);
     await resultPromise;
 
-    const args = spawn.mock.calls[0][1];
-    expect(args).toContain('--model');
-    expect(args).toContain('claude-haiku-4-5');
+    if (IS_WINDOWS) {
+      const cmdStr = spawn.mock.calls[0][0] as string;
+      expect(cmdStr).toContain('--model');
+      expect(cmdStr).toContain('claude-haiku-4-5');
+    } else {
+      const args = spawn.mock.calls[0][1];
+      expect(args).toContain('--model');
+      expect(args).toContain('claude-haiku-4-5');
+    }
   });
 
   it('call() does not pass --model flag when options.model is not set', async () => {
@@ -143,8 +155,13 @@ describe('ClaudeCliProvider', () => {
     closeCb!(0);
     await resultPromise;
 
-    const args = spawn.mock.calls[0][1];
-    expect(args).not.toContain('--model');
+    if (IS_WINDOWS) {
+      const cmdStr = spawn.mock.calls[0][0] as string;
+      expect(cmdStr).not.toContain('--model');
+    } else {
+      const args = spawn.mock.calls[0][1];
+      expect(args).not.toContain('--model');
+    }
   });
 
   it('stream() passes --model flag when options.model is set', async () => {
@@ -172,9 +189,15 @@ describe('ClaudeCliProvider', () => {
     closeCb!(0);
     await streamPromise;
 
-    const args = spawn.mock.calls[0][1];
-    expect(args).toContain('--model');
-    expect(args).toContain('claude-haiku-4-5');
+    if (IS_WINDOWS) {
+      const cmdStr = spawn.mock.calls[0][0] as string;
+      expect(cmdStr).toContain('--model');
+      expect(cmdStr).toContain('claude-haiku-4-5');
+    } else {
+      const args = spawn.mock.calls[0][1];
+      expect(args).toContain('--model');
+      expect(args).toContain('claude-haiku-4-5');
+    }
   });
 
   it('uses CALIBER_CLAUDE_CLI_TIMEOUT_MS when set', () => {

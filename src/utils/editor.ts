@@ -31,7 +31,7 @@ export function openDiffsInEditor(
   for (const file of files) {
     try {
       if (IS_WINDOWS) {
-        const quote = (s: string) => (s.includes(' ') ? `"${s}"` : s);
+        const quote = (s: string) => `"${s}"`;
         const parts = file.originalPath
           ? [cmd, '--diff', quote(file.originalPath), quote(file.proposedPath)]
           : [cmd, quote(file.proposedPath)];
