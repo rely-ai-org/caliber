@@ -75,3 +75,59 @@ export function trackSkillsInstalled(count: number): void {
 export function trackUndoExecuted(): void {
   trackEvent('undo_executed');
 }
+
+// --- Learn ROI events ---
+
+export function trackLearnSessionAnalyzed(props: {
+  eventCount: number;
+  failureCount: number;
+  correctionCount: number;
+  hadLearningsAvailable: boolean;
+  learningsAvailableCount: number;
+  newLearningsProduced: number;
+  wasteTokens: number;
+}): void {
+  trackEvent('learn_session_analyzed', {
+    event_count: props.eventCount,
+    failure_count: props.failureCount,
+    correction_count: props.correctionCount,
+    had_learnings_available: props.hadLearningsAvailable,
+    learnings_available_count: props.learningsAvailableCount,
+    new_learnings_produced: props.newLearningsProduced,
+    waste_tokens: props.wasteTokens,
+  });
+}
+
+export function trackLearnROISnapshot(props: {
+  totalWasteTokens: number;
+  totalSessions: number;
+  sessionsWithLearnings: number;
+  sessionsWithoutLearnings: number;
+  failureRateWithLearnings: number;
+  failureRateWithoutLearnings: number;
+  estimatedSavingsTokens: number;
+  learningCount: number;
+}): void {
+  trackEvent('learn_roi_snapshot', {
+    total_waste_tokens: props.totalWasteTokens,
+    total_sessions: props.totalSessions,
+    sessions_with_learnings: props.sessionsWithLearnings,
+    sessions_without_learnings: props.sessionsWithoutLearnings,
+    failure_rate_with_learnings: props.failureRateWithLearnings,
+    failure_rate_without_learnings: props.failureRateWithoutLearnings,
+    estimated_savings_tokens: props.estimatedSavingsTokens,
+    learning_count: props.learningCount,
+  });
+}
+
+export function trackLearnNewLearning(props: {
+  observationType: string;
+  wasteTokens: number;
+  sourceEventCount: number;
+}): void {
+  trackEvent('learn_new_learning', {
+    observation_type: props.observationType,
+    waste_tokens: props.wasteTokens,
+    source_event_count: props.sourceEventCount,
+  });
+}

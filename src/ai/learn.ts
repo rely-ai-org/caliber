@@ -114,3 +114,31 @@ export async function analyzeEvents(
 
   return parseAnalysisResponse(raw);
 }
+
+export interface WasteEstimate {
+  totalWasteTokens: number;
+  failureCount: number;
+  promptCount: number;
+}
+
+export function calculateSessionWaste(events: SessionEvent[]): WasteEstimate {
+  let totalWasteTokens = 0;
+  let failureCount = 0;
+  let promptCount = 0;
+
+  for (const event of events) {
+    if (event.hook_event_name === 'PostToolUseFailure') {
+      const te = event as ToolEvent;
+      const inputStr = JSON.stringify(te.tool_input);
+      const responseStr = typeof te.tool_response === 'object' && '_truncated' in te.tool_response
+        ? String(te.tool_response._truncated)
+        : JSON.stringify(te.tool_response);
+      totalWasteTokens += estimateTokens(inputStr + responseStr);
+      failureCount++;
+    } else if (event.hook_event_name === 'UserPromptSubmit') {
+      promptCount++;
+    }
+  }
+
+  return { totalWasteTokens, failureCount, promptCount };
+}

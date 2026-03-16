@@ -9,3 +9,4 @@ export const LEARNING_DIR = path.join(CALIBER_DIR, 'learning');
 export const LEARNING_SESSION_FILE = 'current-session.jsonl';
 export const LEARNING_STATE_FILE = 'state.json';
 export const LEARNING_MAX_EVENTS = 500;
+export const LEARNING_ROI_FILE = 'roi-stats.json';

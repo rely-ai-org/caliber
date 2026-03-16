@@ -29,7 +29,7 @@ vi.mock('../../llm/utils.js', () => ({
   stripMarkdownFences: (text: string) => text.replace(/^```(?:json)?\s*/im, '').replace(/```\s*$/m, '').trim(),
 }));
 
-import { analyzeEvents } from '../learn.js';
+import { analyzeEvents, calculateSessionWaste } from '../learn.js';
 import { llmCall } from '../../llm/index.js';
 
 const mockedLlmCall = vi.mocked(llmCall);
@@ -226,5 +226,70 @@ describe('analyzeEvents', () => {
     const result = await analyzeEvents([makeEvent()]);
     expect(result.skills).toHaveLength(1);
     expect(result.skills![0].name).toBe('learned-testing');
+  });
+});
+
+describe('calculateSessionWaste', () => {
+  it('counts failure events and their token cost', () => {
+    const events = [
+      makeEvent({ hook_event_name: 'PostToolUseFailure', tool_input: { cmd: 'x' }, tool_response: { error: 'failed' } }),
+      makeEvent({ hook_event_name: 'PostToolUseFailure', tool_input: { cmd: 'y' }, tool_response: { error: 'boom' } }),
+      makeEvent({ hook_event_name: 'PostToolUse' }),
+    ];
+
+    const result = calculateSessionWaste(events);
+    expect(result.failureCount).toBe(2);
+    expect(result.promptCount).toBe(0);
+    expect(result.totalWasteTokens).toBeGreaterThan(0);
+  });
+
+  it('counts prompt events without adding to waste tokens', () => {
+    const events = [
+      makePromptEvent({ prompt_content: 'No, use pnpm' }),
+      makePromptEvent({ prompt_content: 'Stop doing that' }),
+    ];
+
+    const result = calculateSessionWaste(events);
+    expect(result.promptCount).toBe(2);
+    expect(result.failureCount).toBe(0);
+    expect(result.totalWasteTokens).toBe(0);
+  });
+
+  it('returns zeros for success-only sessions', () => {
+    const events = [
+      makeEvent({ hook_event_name: 'PostToolUse' }),
+      makeEvent({ hook_event_name: 'PostToolUse' }),
+    ];
+
+    const result = calculateSessionWaste(events);
+    expect(result.failureCount).toBe(0);
+    expect(result.promptCount).toBe(0);
+    expect(result.totalWasteTokens).toBe(0);
+  });
+
+  it('sums waste from both failures and corrections', () => {
+    const events = [
+      makeEvent({ hook_event_name: 'PostToolUseFailure', tool_input: { cmd: 'bad' }, tool_response: { error: 'no' } }),
+      makePromptEvent({ prompt_content: 'Wrong approach, try X' }),
+      makeEvent({ hook_event_name: 'PostToolUse' }),
+    ];
+
+    const result = calculateSessionWaste(events);
+    expect(result.failureCount).toBe(1);
+    expect(result.promptCount).toBe(1);
+    expect(result.totalWasteTokens).toBeGreaterThan(0);
+  });
+
+  it('handles truncated responses', () => {
+    const events = [
+      makeEvent({
+        hook_event_name: 'PostToolUseFailure',
+        tool_response: { _truncated: 'very long error output...' },
+      }),
+    ];
+
+    const result = calculateSessionWaste(events);
+    expect(result.failureCount).toBe(1);
+    expect(result.totalWasteTokens).toBeGreaterThan(0);
   });
 });
