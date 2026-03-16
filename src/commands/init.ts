@@ -597,12 +597,14 @@ export async function initCommand(options: InitOptions) {
   }
 
   // Community skills selection (after score check passes)
+  let communitySkillsInstalled = 0;
   if (skillSearchResult.results.length > 0 && !options.autoApprove) {
     console.log(chalk.dim('  Community skills matched to your project:\n'));
     const selected = await selectSkills(skillSearchResult.results);
     if (selected?.length) {
       await installSkills(selected, targetAgent, skillSearchResult.contentMap);
       trackInitSkillsSearch(true, selected.length);
+      communitySkillsInstalled = selected.length;
     }
   }
 
@@ -646,9 +648,10 @@ export async function initCommand(options: InitOptions) {
 
   // Session Learning prompt (only for agents that support it)
   const hasLearnableAgent = targetAgent.includes('claude') || targetAgent.includes('cursor');
+  let enableLearn = false;
   if (hasLearnableAgent) {
     if (!options.autoApprove) {
-      const enableLearn = await promptLearnInstall(targetAgent);
+      enableLearn = await promptLearnInstall(targetAgent);
       trackInitLearnEnabled(enableLearn);
       if (enableLearn) {
         if (targetAgent.includes('claude')) {
@@ -666,6 +669,7 @@ export async function initCommand(options: InitOptions) {
         console.log(chalk.dim('  Skipped. Run ') + chalk.hex('#83D1EB')('caliber learn install') + chalk.dim(' later to enable.'));
       }
     } else {
+      enableLearn = true;
       if (targetAgent.includes('claude')) installLearningHooks();
       if (targetAgent.includes('cursor')) installCursorLearningHooks();
     }
@@ -676,11 +680,42 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.dim('  Your AI agents now understand your project\'s architecture, build commands,'));
   console.log(chalk.dim('  testing patterns, and conventions. All changes are backed up automatically.\n'));
 
-  console.log(chalk.bold('  Next steps:\n'));
-  console.log(`    ${title('caliber score')}        See your full config breakdown`);
-  console.log(`    ${title('caliber refresh')}      Update docs after code changes`);
-  console.log(`    ${title('caliber hooks')}        Toggle auto-refresh hooks`);
-  console.log(`    ${title('caliber skills')}       Discover community skills for your stack`);
+  const done = chalk.green('✓');
+  const skip = chalk.dim('–');
+
+  console.log(chalk.bold('  What was set up:\n'));
+
+  // Score
+  console.log(`    ${done}  Config generated          ${title('caliber score')} for full breakdown`);
+
+  // Hooks
+  const hooksInstalled = hookChoice !== 'skip';
+  if (hooksInstalled) {
+    const hookLabel = hookChoice === 'both' ? 'pre-commit + Claude Code' : hookChoice === 'precommit' ? 'pre-commit' : 'Claude Code';
+    console.log(`    ${done}  Auto-sync hooks           ${chalk.dim(hookLabel + ' — docs stay fresh automatically')}`);
+  } else {
+    console.log(`    ${skip}  Auto-sync hooks           ${title('caliber hooks --install')} to enable later`);
+  }
+
+  // Learning
+  if (hasLearnableAgent) {
+    if (enableLearn) {
+      console.log(`    ${done}  Session learning          ${chalk.dim('agent learns from your feedback')}`);
+    } else {
+      console.log(`    ${skip}  Session learning          ${title('caliber learn install')} to enable later`);
+    }
+  }
+
+  // Community skills
+  if (communitySkillsInstalled > 0) {
+    console.log(`    ${done}  Community skills          ${chalk.dim(`${communitySkillsInstalled} skill${communitySkillsInstalled > 1 ? 's' : ''} installed for your stack`)}`);
+  } else if (skillSearchResult.results.length > 0) {
+    console.log(`    ${skip}  Community skills          ${chalk.dim('available but skipped')}`);
+  }
+
+  console.log(chalk.bold('\n  Explore next:\n'));
+  console.log(`    ${title('caliber skills')}       Find more community skills as your codebase evolves`);
+  console.log(`    ${title('caliber score')}        See the full scoring breakdown with improvement tips`);
   console.log(`    ${title('caliber undo')}         Revert all changes from this run`);
   console.log('');
 
