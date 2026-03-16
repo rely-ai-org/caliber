@@ -686,7 +686,7 @@ export async function initCommand(options: InitOptions) {
   console.log(chalk.bold('  What was set up:\n'));
 
   // Score
-  console.log(`    ${done}  Config generated          ${title('caliber score')} for full breakdown`);
+  console.log(`    ${done}  Config generated          ${title('caliber score')} ${chalk.dim('for full breakdown')}`);
 
   // Hooks
   const hooksInstalled = hookChoice !== 'skip';
