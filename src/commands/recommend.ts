@@ -8,6 +8,7 @@ import { scanLocalState } from '../scanner/index.js';
 import { llmJsonCall } from '../llm/index.js';
 import { loadConfig, getFastModel } from '../llm/config.js';
 import { trackSkillsInstalled } from '../telemetry/events.js';
+import { readState } from '../lib/state.js';
 
 type Platform = 'claude' | 'cursor' | 'codex';
 
@@ -46,13 +47,15 @@ function getSkillPath(platform: Platform, slug: string): string {
   return join('.claude', 'skills', slug, 'SKILL.md');
 }
 
-function getInstalledSkills(): Set<string> {
+function getSkillDir(platform: Platform): string {
+  if (platform === 'cursor') return join(process.cwd(), '.cursor', 'skills');
+  if (platform === 'codex') return join(process.cwd(), '.agents', 'skills');
+  return join(process.cwd(), '.claude', 'skills');
+}
+
+function getInstalledSkills(platforms: Platform[]): Set<string> {
   const installed = new Set<string>();
-  const dirs = [
-    join(process.cwd(), '.claude', 'skills'),
-    join(process.cwd(), '.cursor', 'skills'),
-    join(process.cwd(), '.agents', 'skills'),
-  ];
+  const dirs = platforms.map(getSkillDir);
 
   for (const dir of dirs) {
     try {
@@ -221,7 +224,7 @@ Return ONLY the JSON array.`,
     }));
 }
 
-function buildProjectContext(fingerprint: Fingerprint): string {
+function buildProjectContext(fingerprint: Fingerprint, platforms: Platform[]): string {
   const parts: string[] = [];
 
   if (fingerprint.packageName) parts.push(`Package: ${fingerprint.packageName}`);
@@ -246,7 +249,7 @@ function buildProjectContext(fingerprint: Fingerprint): string {
   }
 
   // Include existing skill names
-  const installed = getInstalledSkills();
+  const installed = getInstalledSkills(platforms);
   if (installed.size > 0) {
     parts.push(`\nAlready installed skills: ${Array.from(installed).join(', ')}`);
   }
@@ -315,13 +318,15 @@ export async function recommendCommand() {
     return;
   }
 
-  await searchAndInstallSkills();
+  const state = readState();
+  const platforms = state?.targetAgent ?? undefined;
+  await searchAndInstallSkills(platforms);
 }
 
-export async function searchAndInstallSkills(): Promise<void> {
+export async function searchAndInstallSkills(targetPlatforms?: Platform[]): Promise<void> {
   const fingerprint = await collectFingerprint(process.cwd());
-  const platforms = detectLocalPlatforms();
-  const installedSkills = getInstalledSkills();
+  const platforms = targetPlatforms ?? detectLocalPlatforms();
+  const installedSkills = getInstalledSkills(platforms);
 
   const technologies = [...new Set([
     ...fingerprint.languages,
@@ -366,7 +371,7 @@ export async function searchAndInstallSkills(): Promise<void> {
   if (config) {
     const scoreSpinner = ora('Scoring relevance for your project...').start();
     try {
-      const projectContext = buildProjectContext(fingerprint);
+      const projectContext = buildProjectContext(fingerprint, platforms);
       results = await scoreWithLLM(newCandidates, projectContext, technologies);
       if (results.length === 0) {
         scoreSpinner.succeed('No highly relevant skills found for your specific project.');

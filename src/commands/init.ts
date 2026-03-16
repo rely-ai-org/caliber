@@ -565,7 +565,7 @@ export async function initCommand(options: InitOptions) {
   if (wantsSkills) {
     trackInitSkillsSearch(true, 0);
     try {
-      await searchAndInstallSkills();
+      await searchAndInstallSkills(targetAgent);
     } catch (err) {
       if ((err as Error).message !== '__exit__') {
         console.log(chalk.dim('  Skills search failed: ' + ((err as Error).message || 'unknown error')));
