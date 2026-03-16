@@ -32,26 +32,25 @@ No API key required — works with your existing **Claude Code** or **Cursor** s
 | New team members start with no AI context | `caliber init` gives any contributor a complete setup in seconds |
 | Configs diverge across AI tools | Cross-platform parity — Claude, Cursor, and Codex stay consistent |
 | No idea if your config is actually helping | Score your setup (A–F grade) and see exactly what to improve |
+| AI keeps making the same mistakes | Session learning captures patterns and corrections automatically |
 
 ## ⚙️ How It Works
 
 ```
 caliber init
 │
-├─ 1. 🔌 Connect      Choose your LLM provider — Claude Code seat, Cursor seat,
+├─ 1. 🔌 Setup        Choose your LLM provider — Claude Code seat, Cursor seat,
 │                      or an API key (Anthropic, OpenAI, Vertex AI)
 │
-├─ 2. 🔍 Discover     Fingerprint your project: languages, frameworks, dependencies,
-│                      file structure, and existing agent configs
+├─ 2. 🛠️  Engine       Fingerprint your project, generate configs in parallel,
+│                      search community skills, and auto-refine against
+│                      deterministic scoring checks (up to 2 iterations)
 │
-├─ 3. 🛠️  Generate     Build optimized configs with parallel LLM calls
-│                      (heavy model for docs, fast model for skills)
-│
-├─ 4. 👀 Review       See a diff of every proposed change — accept, refine
+├─ 3. 👀 Review       See a diff of every proposed change — accept, refine
 │                      via chat, or decline. All originals are backed up
 │
-└─ 5. 🧩 Skills       Search community registries and install relevant
-                       skills for your tech stack
+└─ 4. ✅ Finalize     Write files, install auto-refresh hooks, and set up
+                       session learning for continuous improvement
 ```
 
 Already have a setup? If your existing config scores **95+**, Caliber skips full regeneration and applies targeted fixes to the specific checks that are failing.
@@ -60,6 +59,7 @@ Already have a setup? If your existing config scores **95+**, Caliber skips full
 
 **Claude Code**
 - `CLAUDE.md` — Project context, build/test commands, architecture, conventions
+- `CALIBER_LEARNINGS.md` — Patterns learned from your AI coding sessions
 - `.claude/skills/*/SKILL.md` — Reusable skills ([OpenSkills](https://agentskills.io) format)
 - `.mcp.json` — Auto-discovered MCP server configurations
 - `.claude/settings.json` — Permissions and hooks
@@ -126,17 +126,31 @@ Every failing check includes structured fix data — when `caliber init` runs, t
 
 </details>
 
+### 🧠 Session Learning
+Caliber watches your AI coding sessions and learns from them. Hooks capture tool usage, failures, and your corrections — then an LLM distills operational patterns into `CALIBER_LEARNINGS.md`.
+
+```bash
+caliber learn install      # Install hooks for Claude Code and Cursor
+caliber learn status       # View hook status, event count, and ROI summary
+caliber learn finalize     # Manually trigger analysis (auto-runs on session end)
+caliber learn remove       # Remove hooks
+```
+
+Learned items are categorized by type — **[correction]**, **[gotcha]**, **[fix]**, **[pattern]**, **[env]**, **[convention]** — and automatically deduplicated. ROI tracking shows how much time and tokens the learnings save across sessions.
+
 ### 🔄 Auto-Refresh
 Keep configs in sync with your codebase automatically:
 
 | Hook | Trigger | What it does |
 |---|---|---|
-| **Claude Code** | End of each session | Runs `caliber refresh` and updates docs |
 | **Git pre-commit** | Before each commit | Refreshes docs and stages updated files |
+| **Claude Code session end** | End of each session | Runs `caliber refresh` and updates docs |
+| **Learning hooks** | During each session | Captures events for session learning |
 
 ```bash
-caliber hooks --install    # Enable all hooks
-caliber hooks --remove     # Disable all hooks
+caliber hooks --install    # Enable refresh hooks
+caliber hooks --remove     # Disable refresh hooks
+caliber learn install      # Enable learning hooks
 ```
 
 The `refresh` command analyzes your git diff (committed, staged, and unstaged changes) and updates config files to reflect what changed. Works across multiple repos when run from a parent directory.
@@ -152,11 +166,12 @@ Every change Caliber makes can be undone:
 
 | Command | Description |
 |---|---|
-| `caliber init` | Full setup wizard — analyze, generate, review, install skills |
+| `caliber init` | Full setup wizard — analyze, generate, review, install hooks |
 | `caliber score` | Score config quality (deterministic, no LLM) |
 | `caliber regenerate` | Re-analyze and regenerate configs (aliases: `regen`, `re`) |
 | `caliber refresh` | Update docs based on recent code changes |
 | `caliber skills` | Discover and install community skills |
+| `caliber learn` | Session learning — install hooks, view status, finalize analysis |
 | `caliber hooks` | Manage auto-refresh hooks |
 | `caliber config` | Configure LLM provider, API key, and model |
 | `caliber status` | Show current setup status |
