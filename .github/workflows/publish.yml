@@ -73,6 +73,85 @@ jobs:
           echo "version=${NEW_VERSION}" >> "$GITHUB_OUTPUT"
           echo "Publishing v${NEW_VERSION}"
 
+      - name: Generate changelog
+        if: steps.version.outputs.skip != 'true'
+        run: |
+          VERSION=${{ steps.version.outputs.version }}
+          LAST_TAG=$(git describe --tags --abbrev=0 --match "v*" 2>/dev/null || echo "")
+          DATE=$(date +%Y-%m-%d)
+
+          if [ -n "$LAST_TAG" ]; then
+            RANGE="${LAST_TAG}..HEAD"
+          else
+            RANGE="HEAD"
+          fi
+
+          FEATURES=""
+          FIXES=""
+          REFACTORS=""
+          OTHER=""
+
+          while IFS= read -r line; do
+            # Skip merge commits and release commits
+            echo "$line" | grep -qE "^(Merge |chore: release)" && continue
+
+            SUBJECT="$line"
+            # Extract scope and description from conventional commit
+            if echo "$SUBJECT" | grep -qE "^feat(\(.+\))?!?:"; then
+              DESC=$(echo "$SUBJECT" | sed -E 's/^feat(\([^)]+\))?!?:[[:space:]]*//')
+              SCOPE=$(echo "$SUBJECT" | sed -nE 's/^feat\(([^)]+)\)!?:.*/\1/p')
+              if [ -n "$SCOPE" ]; then
+                FEATURES="${FEATURES}\n- **${SCOPE}**: ${DESC}"
+              else
+                FEATURES="${FEATURES}\n- ${DESC}"
+              fi
+            elif echo "$SUBJECT" | grep -qE "^fix(\(.+\))?!?:"; then
+              DESC=$(echo "$SUBJECT" | sed -E 's/^fix(\([^)]+\))?!?:[[:space:]]*//')
+              SCOPE=$(echo "$SUBJECT" | sed -nE 's/^fix\(([^)]+)\)!?:.*/\1/p')
+              if [ -n "$SCOPE" ]; then
+                FIXES="${FIXES}\n- **${SCOPE}**: ${DESC}"
+              else
+                FIXES="${FIXES}\n- ${DESC}"
+              fi
+            elif echo "$SUBJECT" | grep -qE "^refactor(\(.+\))?!?:"; then
+              DESC=$(echo "$SUBJECT" | sed -E 's/^refactor(\([^)]+\))?!?:[[:space:]]*//')
+              SCOPE=$(echo "$SUBJECT" | sed -nE 's/^refactor\(([^)]+)\)!?:.*/\1/p')
+              if [ -n "$SCOPE" ]; then
+                REFACTORS="${REFACTORS}\n- **${SCOPE}**: ${DESC}"
+              else
+                REFACTORS="${REFACTORS}\n- ${DESC}"
+              fi
+            else
+              # Skip chore/docs/test/ci commits from changelog
+              echo "$SUBJECT" | grep -qE "^(chore|docs|test|ci|build|style)(\(.+\))?:" && continue
+              OTHER="${OTHER}\n- ${SUBJECT}"
+            fi
+          done < <(git log "$RANGE" --format="%s" --no-merges)
+
+          # Build the new changelog section
+          ENTRY="## v${VERSION} (${DATE})"
+
+          if [ -n "$FEATURES" ]; then
+            ENTRY="${ENTRY}\n\n### Features\n${FEATURES}"
+          fi
+          if [ -n "$FIXES" ]; then
+            ENTRY="${ENTRY}\n\n### Bug Fixes\n${FIXES}"
+          fi
+          if [ -n "$REFACTORS" ]; then
+            ENTRY="${ENTRY}\n\n### Refactoring\n${REFACTORS}"
+          fi
+          if [ -n "$OTHER" ]; then
+            ENTRY="${ENTRY}\n\n### Other\n${OTHER}"
+          fi
+
+          # Prepend to CHANGELOG.md
+          if [ -f CHANGELOG.md ]; then
+            EXISTING=$(cat CHANGELOG.md)
+            printf '%b\n\n%s\n' "$ENTRY" "$EXISTING" > CHANGELOG.md
+          else
+            printf '# Changelog\n\n%b\n' "$ENTRY" > CHANGELOG.md
+          fi
+
       - name: Publish
         if: steps.version.outputs.skip != 'true'
         run: npm publish --access public
@@ -85,7 +164,7 @@ jobs:
           VERSION=${{ steps.version.outputs.version }}
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
-          git add package.json package-lock.json
+          git add package.json package-lock.json CHANGELOG.md
           git diff --cached --quiet && echo "No version changes to commit" || git commit -m "chore: release v${VERSION} [skip ci]"
           git tag "v${VERSION}"
           git push && git push --tags
