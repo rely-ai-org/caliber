@@ -2,6 +2,8 @@ import fs from 'fs';
 import path from 'path';
 import { resolveCaliber, isCaliberCommand } from './resolve-caliber.js';
 
+// ── Claude Code hooks ────────────────────────────────────────────────
+
 const SETTINGS_PATH = path.join('.claude', 'settings.json');
 
 const HOOK_TAILS = [
@@ -90,6 +92,94 @@ export function installLearningHooks(): { installed: boolean; alreadyInstalled: 
   writeSettings(settings);
   return { installed: true, alreadyInstalled: false };
 }
+
+// ── Cursor hooks (https://cursor.com/docs/hooks) ─────────────────────
+// Cursor uses .cursor/hooks.json with camelCase event names and a flatter structure.
+
+const CURSOR_HOOKS_PATH = path.join('.cursor', 'hooks.json');
+
+const CURSOR_HOOK_EVENTS = [
+  { event: 'postToolUse', tail: 'learn observe' },
+  { event: 'postToolUseFailure', tail: 'learn observe --failure' },
+  { event: 'sessionEnd', tail: 'learn finalize' },
+] as const;
+
+interface CursorHooksConfig {
+  version: number;
+  hooks: Record<string, Array<{ command: string }>>;
+}
+
+function readCursorHooks(): CursorHooksConfig {
+  if (!fs.existsSync(CURSOR_HOOKS_PATH)) return { version: 1, hooks: {} };
+  try {
+    return JSON.parse(fs.readFileSync(CURSOR_HOOKS_PATH, 'utf-8'));
+  } catch {
+    return { version: 1, hooks: {} };
+  }
+}
+
+function writeCursorHooks(config: CursorHooksConfig): void {
+  const dir = path.dirname(CURSOR_HOOKS_PATH);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(CURSOR_HOOKS_PATH, JSON.stringify(config, null, 2));
+}
+
+function hasCursorHook(entries: Array<{ command: string }>, tail: string): boolean {
+  return entries.some(e => isCaliberCommand(e.command, tail));
+}
+
+export function areCursorLearningHooksInstalled(): boolean {
+  const config = readCursorHooks();
+  return CURSOR_HOOK_EVENTS.every(cfg => {
+    const entries = config.hooks[cfg.event];
+    return Array.isArray(entries) && hasCursorHook(entries, cfg.tail);
+  });
+}
+
+export function installCursorLearningHooks(): { installed: boolean; alreadyInstalled: boolean } {
+  if (areCursorLearningHooksInstalled()) {
+    return { installed: false, alreadyInstalled: true };
+  }
+
+  const config = readCursorHooks();
+  const bin = resolveCaliber();
+
+  for (const cfg of CURSOR_HOOK_EVENTS) {
+    if (!Array.isArray(config.hooks[cfg.event])) {
+      config.hooks[cfg.event] = [];
+    }
+    if (!hasCursorHook(config.hooks[cfg.event], cfg.tail)) {
+      config.hooks[cfg.event].push({ command: `${bin} ${cfg.tail}` });
+    }
+  }
+
+  writeCursorHooks(config);
+  return { installed: true, alreadyInstalled: false };
+}
+
+export function removeCursorLearningHooks(): { removed: boolean; notFound: boolean } {
+  const config = readCursorHooks();
+  let removedAny = false;
+
+  for (const cfg of CURSOR_HOOK_EVENTS) {
+    const entries = config.hooks[cfg.event];
+    if (!Array.isArray(entries)) continue;
+
+    const idx = entries.findIndex(e => isCaliberCommand(e.command, cfg.tail));
+    if (idx !== -1) {
+      entries.splice(idx, 1);
+      removedAny = true;
+      if (entries.length === 0) delete config.hooks[cfg.event];
+    }
+  }
+
+  if (!removedAny) return { removed: false, notFound: true };
+
+  writeCursorHooks(config);
+  return { removed: true, notFound: false };
+}
+
+// ── Claude Code hooks (continued) ────────────────────────────────────
 
 export function removeLearningHooks(): { removed: boolean; notFound: boolean } {
   const settings = readSettings();

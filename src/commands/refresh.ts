@@ -9,6 +9,7 @@ import { readState, writeState, getCurrentHeadSha } from '../lib/state.js';
 import { writeRefreshDocs } from '../writers/refresh.js';
 import { collectFingerprint } from '../fingerprint/index.js';
 import { refreshDocs } from '../ai/refresh.js';
+import { readLearnedSection } from '../learner/writer.js';
 import { loadConfig } from '../llm/config.js';
 import { validateModel } from '../llm/index.js';
 import { trackRefreshCompleted } from '../telemetry/events.js';
@@ -60,6 +61,7 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
   const spinner = quiet ? null : ora(`${prefix}Analyzing changes...`).start();
 
   const existingDocs = readExistingConfigs(repoDir);
+  const learnedSection = readLearnedSection();
   const fingerprint = await collectFingerprint(repoDir);
   const projectContext = {
     languages: fingerprint.languages,
@@ -77,6 +79,7 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
     },
     existingDocs,
     projectContext,
+    learnedSection,
   );
 
   if (!response.docsUpdated || response.docsUpdated.length === 0) {

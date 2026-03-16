@@ -113,7 +113,8 @@ function getPrecommitBlock(): string {
 if [ -x "${bin}" ] || command -v "${bin}" >/dev/null 2>&1; then
   echo "\\033[2mcaliber: refreshing docs...\\033[0m"
   "${bin}" refresh 2>/dev/null || true
-  git diff --name-only -- CLAUDE.md .claude/ .cursor/ AGENTS.md 2>/dev/null | xargs git add 2>/dev/null || true
+  "${bin}" learn finalize 2>/dev/null || true
+  git diff --name-only -- CLAUDE.md .claude/ .cursor/ AGENTS.md CALIBER_LEARNINGS.md 2>/dev/null | xargs git add 2>/dev/null || true
 fi
 ${PRECOMMIT_END}`;
 }

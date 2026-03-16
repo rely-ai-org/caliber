@@ -106,3 +106,57 @@ export function writeState(state: LearningState): void {
 export function resetState(): void {
   writeState({ ...DEFAULT_STATE });
 }
+
+// ── Finalize lock (prevents concurrent analysis from parallel sessions) ──
+
+const LOCK_FILE = 'finalize.lock';
+const LOCK_STALE_MS = 5 * 60 * 1000; // 5 minutes
+
+function lockFilePath(): string {
+  return path.join(LEARNING_DIR, LOCK_FILE);
+}
+
+/** Attempt to acquire the finalize lock. Returns true if acquired. */
+export function acquireFinalizeLock(): boolean {
+  ensureLearningDir();
+  const lockPath = lockFilePath();
+
+  if (fs.existsSync(lockPath)) {
+    try {
+      const stat = fs.statSync(lockPath);
+      if (Date.now() - stat.mtimeMs < LOCK_STALE_MS) {
+        return false; // Lock is held and not stale
+      }
+    } catch {
+      // Can't stat — treat as stale
+    }
+  }
+
+  try {
+    fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
+    return true;
+  } catch {
+    // File was created between check and write — another process won
+    // Try overwriting if the existing lock is stale
+    try {
+      const stat = fs.statSync(lockPath);
+      if (Date.now() - stat.mtimeMs >= LOCK_STALE_MS) {
+        fs.writeFileSync(lockPath, String(process.pid));
+        return true;
+      }
+    } catch {
+      // Give up
+    }
+    return false;
+  }
+}
+
+/** Release the finalize lock. */
+export function releaseFinalizeLock(): void {
+  const lockPath = lockFilePath();
+  try {
+    if (fs.existsSync(lockPath)) fs.unlinkSync(lockPath);
+  } catch {
+    // Best effort
+  }
+}

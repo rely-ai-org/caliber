@@ -40,9 +40,10 @@ interface RefreshResponse {
 export async function refreshDocs(
   diff: RefreshDiff,
   existingDocs: ExistingDocs,
-  projectContext: ProjectContext
+  projectContext: ProjectContext,
+  learnedSection?: string | null,
 ): Promise<RefreshResponse> {
-  const prompt = buildRefreshPrompt(diff, existingDocs, projectContext);
+  const prompt = buildRefreshPrompt(diff, existingDocs, projectContext, learnedSection);
   const fastModel = getFastModel();
 
   const raw = await llmCall({
@@ -58,7 +59,8 @@ export async function refreshDocs(
 function buildRefreshPrompt(
   diff: RefreshDiff,
   existingDocs: ExistingDocs,
-  projectContext: ProjectContext
+  projectContext: ProjectContext,
+  learnedSection?: string | null,
 ): string {
   const parts: string[] = [];
 
@@ -109,6 +111,12 @@ function buildRefreshPrompt(
       parts.push(`\n[.cursor/rules/${rule.filename}]`);
       parts.push(rule.content);
     }
+  }
+
+  if (learnedSection) {
+    parts.push('\n--- Learned Patterns (from session learning) ---');
+    parts.push('Consider these accumulated learnings when deciding what to update:');
+    parts.push(learnedSection);
   }
 
   return parts.join('\n');

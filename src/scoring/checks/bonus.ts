@@ -6,6 +6,7 @@ import {
   POINTS_HOOKS,
   POINTS_AGENTS_MD,
   POINTS_OPEN_SKILLS_FORMAT,
+  POINTS_LEARNED_CONTENT,
 } from '../constants.js';
 import { readFileOrNull } from '../utils.js';
 
@@ -127,6 +128,23 @@ export function checkBonus(dir: string): Check[] {
           instruction: 'Migrate flat skill files to .claude/skills/{name}/SKILL.md with YAML frontmatter.',
         }
       : undefined,
+  });
+
+  // 4. Learned content present
+  const learningsContent = readFileOrNull(join(dir, 'CALIBER_LEARNINGS.md'));
+  const hasLearned = learningsContent
+    ? learningsContent.split('\n').filter(l => l.startsWith('- ')).length > 0
+    : false;
+
+  checks.push({
+    id: 'learned_content',
+    name: 'Learned content present',
+    category: 'bonus',
+    maxPoints: POINTS_LEARNED_CONTENT,
+    earnedPoints: hasLearned ? POINTS_LEARNED_CONTENT : 0,
+    passed: hasLearned,
+    detail: hasLearned ? 'Session learnings found in CALIBER_LEARNINGS.md' : 'No learned content',
+    suggestion: hasLearned ? undefined : 'Install learning hooks: `caliber learn install`',
   });
 
   return checks;

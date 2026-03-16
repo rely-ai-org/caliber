@@ -8,6 +8,7 @@ const DOC_PATTERNS = [
   '.cursorrules',
   '.cursor/rules/',
   '.claude/skills/',
+  'CALIBER_LEARNINGS.md',
 ];
 
 function excludeArgs(): string[] {

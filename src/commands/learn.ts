@@ -1,3 +1,4 @@
+import fs from 'fs';
 import chalk from 'chalk';
 import { readStdin } from '../learner/stdin.js';
 import {
@@ -8,18 +9,26 @@ import {
   clearSession,
   resetState,
   getEventCount,
+  acquireFinalizeLock,
+  releaseFinalizeLock,
 } from '../learner/storage.js';
 import type { ToolEvent } from '../learner/storage.js';
-import { writeLearnedContent, readLearnedSection } from '../learner/writer.js';
+import { writeLearnedContent, readLearnedSection, migrateInlineLearnings } from '../learner/writer.js';
 import {
   areLearningHooksInstalled,
   installLearningHooks,
   removeLearningHooks,
+  areCursorLearningHooksInstalled,
+  installCursorLearningHooks,
+  removeCursorLearningHooks,
 } from '../lib/learning-hooks.js';
 import { readExistingConfigs } from '../fingerprint/existing-config.js';
 import { analyzeEvents } from '../ai/learn.js';
 import { loadConfig } from '../llm/config.js';
 import { validateModel } from '../llm/index.js';
+
+/** Minimum tool events required before running LLM analysis. */
+const MIN_EVENTS_FOR_ANALYSIS = 50;
 
 export async function learnObserveCommand(options: { failure?: boolean }) {
   try {
@@ -30,11 +39,11 @@ export async function learnObserveCommand(options: { failure?: boolean }) {
 
     const event: ToolEvent = {
       timestamp: new Date().toISOString(),
-      session_id: hookData.session_id || 'unknown',
+      session_id: hookData.session_id || hookData.conversation_id || 'unknown',
       hook_event_name: options.failure ? 'PostToolUseFailure' : 'PostToolUse',
       tool_name: hookData.tool_name || 'unknown',
       tool_input: hookData.tool_input || {},
-      tool_response: hookData.tool_response || {},
+      tool_response: hookData.tool_response || hookData.tool_output || {},
       tool_use_id: hookData.tool_use_id || '',
       cwd: hookData.cwd || process.cwd(),
     };
@@ -51,10 +60,13 @@ export async function learnObserveCommand(options: { failure?: boolean }) {
 }
 
 export async function learnFinalizeCommand() {
-  // Skip if another caliber process is already running (e.g. hook fired mid-session)
   const { isCaliberRunning } = await import('../lib/lock.js');
   if (isCaliberRunning()) return;
 
+  // Prevent concurrent finalize from parallel sessions
+  if (!acquireFinalizeLock()) return;
+
+  let analyzed = false;
   try {
     const config = loadConfig();
     if (!config) {
@@ -64,14 +76,11 @@ export async function learnFinalizeCommand() {
     }
 
     const events = readAllEvents();
-    if (!events.length) {
-      clearSession();
-      resetState();
-      return;
-    }
+    if (events.length < MIN_EVENTS_FOR_ANALYSIS) return;
 
-    // Verify configured model is reachable before LLM analysis
-    await validateModel();
+    await validateModel({ fast: true });
+
+    migrateInlineLearnings();
 
     const existingConfigs = readExistingConfigs(process.cwd());
     const existingLearnedSection = readLearnedSection();
@@ -84,58 +93,114 @@ export async function learnFinalizeCommand() {
       existingSkills,
     );
 
+    analyzed = true;
+
     if (response.claudeMdLearnedSection || response.skills?.length) {
-      writeLearnedContent({
+      const result = writeLearnedContent({
         claudeMdLearnedSection: response.claudeMdLearnedSection,
         skills: response.skills,
       });
+      if (result.newItemCount > 0) {
+        console.log(chalk.dim(`caliber: learned ${result.newItemCount} new pattern${result.newItemCount === 1 ? '' : 's'}`));
+        for (const item of result.newItems) {
+          console.log(chalk.dim(`  + ${item.replace(/^- /, '').slice(0, 80)}`));
+        }
+      }
     }
   } catch {
     // Finalize should not fail visibly
   } finally {
-    clearSession();
-    resetState();
+    if (analyzed) {
+      clearSession();
+      resetState();
+    }
+    releaseFinalizeLock();
   }
 }
 
 export async function learnInstallCommand() {
-  const result = installLearningHooks();
-  if (result.alreadyInstalled) {
-    console.log(chalk.dim('Learning hooks already installed.'));
+  let anyInstalled = false;
+
+  if (fs.existsSync('.claude')) {
+    const r = installLearningHooks();
+    if (r.installed) {
+      console.log(chalk.green('✓') + ' Claude Code learning hooks installed');
+      anyInstalled = true;
+    } else if (r.alreadyInstalled) {
+      console.log(chalk.dim('  Claude Code hooks already installed'));
+    }
+  }
+
+  if (fs.existsSync('.cursor')) {
+    const r = installCursorLearningHooks();
+    if (r.installed) {
+      console.log(chalk.green('✓') + ' Cursor learning hooks installed');
+      anyInstalled = true;
+    } else if (r.alreadyInstalled) {
+      console.log(chalk.dim('  Cursor hooks already installed'));
+    }
+  }
+
+  if (!fs.existsSync('.claude') && !fs.existsSync('.cursor')) {
+    console.log(chalk.yellow('No .claude/ or .cursor/ directory found.'));
+    console.log(chalk.dim('  Run `caliber init` first, or create the directory manually.'));
     return;
   }
-  console.log(chalk.green('✓') + ' Learning hooks installed in .claude/settings.json');
-  console.log(chalk.dim('  PostToolUse, PostToolUseFailure, and SessionEnd hooks active.'));
-  console.log(chalk.dim('  Session learnings will be written to CLAUDE.md and skills.'));
+
+  if (anyInstalled) {
+    console.log(chalk.dim(`  Tool usage will be recorded and learnings extracted after ≥${MIN_EVENTS_FOR_ANALYSIS} events.`));
+    console.log(chalk.dim('  Learnings written to CALIBER_LEARNINGS.md.'));
+  }
 }
 
 export async function learnRemoveCommand() {
-  const result = removeLearningHooks();
-  if (result.notFound) {
-    console.log(chalk.dim('Learning hooks not found.'));
-    return;
+  let anyRemoved = false;
+
+  const r1 = removeLearningHooks();
+  if (r1.removed) {
+    console.log(chalk.green('✓') + ' Claude Code learning hooks removed');
+    anyRemoved = true;
   }
-  console.log(chalk.green('✓') + ' Learning hooks removed from .claude/settings.json');
+
+  const r2 = removeCursorLearningHooks();
+  if (r2.removed) {
+    console.log(chalk.green('✓') + ' Cursor learning hooks removed');
+    anyRemoved = true;
+  }
+
+  if (!anyRemoved) {
+    console.log(chalk.dim('No learning hooks found.'));
+  }
 }
 
 export async function learnStatusCommand() {
-  const installed = areLearningHooksInstalled();
+  const claudeInstalled = areLearningHooksInstalled();
+  const cursorInstalled = areCursorLearningHooksInstalled();
   const state = readState();
   const eventCount = getEventCount();
 
   console.log(chalk.bold('Session Learning Status'));
   console.log();
 
-  if (installed) {
-    console.log(chalk.green('✓') + ' Learning hooks are ' + chalk.green('installed'));
+  if (claudeInstalled) {
+    console.log(chalk.green('✓') + ' Claude Code hooks ' + chalk.green('installed'));
   } else {
-    console.log(chalk.dim('✗') + ' Learning hooks are ' + chalk.yellow('not installed'));
+    console.log(chalk.dim('✗') + ' Claude Code hooks ' + chalk.dim('not installed'));
+  }
+
+  if (cursorInstalled) {
+    console.log(chalk.green('✓') + ' Cursor hooks ' + chalk.green('installed'));
+  } else {
+    console.log(chalk.dim('✗') + ' Cursor hooks ' + chalk.dim('not installed'));
+  }
+
+  if (!claudeInstalled && !cursorInstalled) {
     console.log(chalk.dim('  Run `caliber learn install` to enable session learning.'));
   }
 
   console.log();
   console.log(`Events recorded: ${chalk.cyan(String(eventCount))}`);
-  console.log(`Total this session: ${chalk.cyan(String(state.eventCount))}`);
+  console.log(`Threshold for analysis: ${chalk.cyan(String(MIN_EVENTS_FOR_ANALYSIS))}`);
 
   if (state.lastAnalysisTimestamp) {
     console.log(`Last analysis: ${chalk.cyan(state.lastAnalysisTimestamp)}`);
@@ -146,6 +211,6 @@ export async function learnStatusCommand() {
   const learnedSection = readLearnedSection();
   if (learnedSection) {
     const lineCount = learnedSection.split('\n').filter(Boolean).length;
-    console.log(`\nLearned items in CLAUDE.md: ${chalk.cyan(String(lineCount))}`);
+    console.log(`\nLearned items in CALIBER_LEARNINGS.md: ${chalk.cyan(String(lineCount))}`);
   }
 }

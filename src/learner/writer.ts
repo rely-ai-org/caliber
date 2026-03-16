@@ -1,8 +1,20 @@
 import fs from 'fs';
 import path from 'path';
 
+const LEARNINGS_FILE = 'CALIBER_LEARNINGS.md';
+const LEARNINGS_HEADER = `# Caliber Learnings
+
+Accumulated patterns and anti-patterns from development sessions.
+Auto-managed by [caliber](https://github.com/rely-ai-org/caliber) — do not edit manually.
+
+`;
+
+// Legacy markers for migration from inline CLAUDE.md section
 const LEARNED_START = '<!-- caliber:learned -->';
 const LEARNED_END = '<!-- /caliber:learned -->';
+
+/** Max learned items to retain — keeps newest when exceeded. */
+const MAX_LEARNED_ITEMS = 30;
 
 export interface LearnedSkill {
   name: string;
@@ -16,12 +28,22 @@ export interface LearnedUpdate {
   skills: LearnedSkill[] | null;
 }
 
-export function writeLearnedContent(update: LearnedUpdate): string[] {
+export interface WriteResult {
+  written: string[];
+  newItemCount: number;
+  newItems: string[];
+}
+
+export function writeLearnedContent(update: LearnedUpdate): WriteResult {
   const written: string[] = [];
+  let newItemCount = 0;
+  let newItems: string[] = [];
 
   if (update.claudeMdLearnedSection) {
-    writeLearnedSection(update.claudeMdLearnedSection);
-    written.push('CLAUDE.md');
+    const result = writeLearnedSection(update.claudeMdLearnedSection);
+    newItemCount = result.newCount;
+    newItems = result.newItems;
+    written.push(LEARNINGS_FILE);
   }
 
   if (update.skills?.length) {
@@ -31,31 +53,73 @@ export function writeLearnedContent(update: LearnedUpdate): string[] {
     }
   }
 
-  return written;
+  return { written, newItemCount, newItems };
 }
 
-function writeLearnedSection(content: string): void {
-  const claudeMdPath = 'CLAUDE.md';
-  let existing = '';
+function parseBullets(content: string): string[] {
+  const lines = content.split('\n');
+  const bullets: string[] = [];
+  let current = '';
 
-  if (fs.existsSync(claudeMdPath)) {
-    existing = fs.readFileSync(claudeMdPath, 'utf-8');
+  for (const line of lines) {
+    if (line.startsWith('- ')) {
+      if (current) bullets.push(current);
+      current = line;
+    } else if (current && line.trim() && !line.startsWith('#')) {
+      current += '\n' + line;
+    } else {
+      if (current) bullets.push(current);
+      current = '';
+    }
+  }
+  if (current) bullets.push(current);
+  return bullets;
+}
+
+function normalizeBullet(bullet: string): string {
+  return bullet
+    .replace(/^- /, '')
+    .replace(/`[^`]*`/g, '')
+    .replace(/\s+/g, ' ')
+    .toLowerCase()
+    .trim();
+}
+
+function deduplicateLearnedItems(
+  existing: string | null,
+  incoming: string
+): { merged: string; newCount: number; newItems: string[] } {
+  const existingBullets = existing ? parseBullets(existing) : [];
+  const incomingBullets = parseBullets(incoming);
+  const merged = [...existingBullets];
+  const newItems: string[] = [];
+
+  for (const bullet of incomingBullets) {
+    const norm = normalizeBullet(bullet);
+    if (!norm) continue;
+    const isDup = merged.some(e => {
+      const eNorm = normalizeBullet(e);
+      // Require the shorter string to be at least 70% of the longer to count as duplicate
+      const shorter = Math.min(norm.length, eNorm.length);
+      const longer = Math.max(norm.length, eNorm.length);
+      if (!(eNorm.includes(norm) || norm.includes(eNorm))) return false;
+      return shorter / longer > 0.7;
+    });
+    if (!isDup) {
+      merged.push(bullet);
+      newItems.push(bullet);
+    }
   }
 
-  const section = `${LEARNED_START}\n${content}\n${LEARNED_END}`;
+  const capped = merged.length > MAX_LEARNED_ITEMS ? merged.slice(-MAX_LEARNED_ITEMS) : merged;
+  return { merged: capped.join('\n'), newCount: newItems.length, newItems };
+}
 
-  const startIdx = existing.indexOf(LEARNED_START);
-  const endIdx = existing.indexOf(LEARNED_END);
-
-  let updated: string;
-  if (startIdx !== -1 && endIdx !== -1) {
-    updated = existing.slice(0, startIdx) + section + existing.slice(endIdx + LEARNED_END.length);
-  } else {
-    const separator = existing.endsWith('\n') || existing === '' ? '' : '\n';
-    updated = existing + separator + '\n' + section + '\n';
-  }
-
-  fs.writeFileSync(claudeMdPath, updated);
+function writeLearnedSection(content: string): { newCount: number; newItems: string[] } {
+  const existingSection = readLearnedSection();
+  const { merged, newCount, newItems } = deduplicateLearnedItems(existingSection, content);
+  fs.writeFileSync(LEARNINGS_FILE, LEARNINGS_HEADER + merged + '\n');
+  return { newCount, newItems };
 }
 
 function writeLearnedSkill(skill: LearnedSkill): string {
@@ -82,6 +146,13 @@ function writeLearnedSkill(skill: LearnedSkill): string {
 }
 
 export function readLearnedSection(): string | null {
+  if (fs.existsSync(LEARNINGS_FILE)) {
+    const content = fs.readFileSync(LEARNINGS_FILE, 'utf-8');
+    const bullets = content.split('\n').filter(l => l.startsWith('- ')).join('\n');
+    return bullets || null;
+  }
+
+  // Migration fallback: check old inline section in CLAUDE.md
   const claudeMdPath = 'CLAUDE.md';
   if (!fs.existsSync(claudeMdPath)) return null;
 
@@ -91,5 +162,29 @@ export function readLearnedSection(): string | null {
 
   if (startIdx === -1 || endIdx === -1) return null;
 
-  return content.slice(startIdx + LEARNED_START.length, endIdx).trim();
+  return content.slice(startIdx + LEARNED_START.length, endIdx).trim() || null;
+}
+
+/** Migrate learned content from inline CLAUDE.md section to CALIBER_LEARNINGS.md. */
+export function migrateInlineLearnings(): boolean {
+  if (fs.existsSync(LEARNINGS_FILE)) return false;
+
+  const claudeMdPath = 'CLAUDE.md';
+  if (!fs.existsSync(claudeMdPath)) return false;
+
+  const content = fs.readFileSync(claudeMdPath, 'utf-8');
+  const startIdx = content.indexOf(LEARNED_START);
+  const endIdx = content.indexOf(LEARNED_END);
+
+  if (startIdx === -1 || endIdx === -1) return false;
+
+  const section = content.slice(startIdx + LEARNED_START.length, endIdx).trim();
+  if (!section) return false;
+
+  fs.writeFileSync(LEARNINGS_FILE, LEARNINGS_HEADER + section + '\n');
+
+  const cleaned = content.slice(0, startIdx) + content.slice(endIdx + LEARNED_END.length);
+  fs.writeFileSync(claudeMdPath, cleaned.replace(/\n{3,}/g, '\n\n').trim() + '\n');
+
+  return true;
 }
