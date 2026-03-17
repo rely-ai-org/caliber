@@ -32,7 +32,7 @@ export class CursorAcpProvider implements LLMProvider {
   }
 
   private buildArgs(model: string, streaming: boolean): string[] {
-    const args = ['--print'];
+    const args = ['--print', '--trust'];
 
     if (model && model !== 'auto' && model !== 'default') {
       args.push('--model', model);

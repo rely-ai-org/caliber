@@ -56,7 +56,7 @@ describe('CursorAcpProvider', () => {
     expect(result).toBe('{"languages":["TypeScript"]}');
     expect(spawn).toHaveBeenCalledWith(
       'agent',
-      ['--print', '--model', 'sonnet-4.6'],
+      ['--print', '--trust', '--model', 'sonnet-4.6'],
       expect.any(Object),
     );
   });
@@ -70,7 +70,7 @@ describe('CursorAcpProvider', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       'agent',
-      ['--print', '--model', 'sonnet-4.6', '--api-key', 'test-key'],
+      ['--print', '--trust', '--model', 'sonnet-4.6', '--api-key', 'test-key'],
       expect.any(Object),
     );
   });
@@ -83,7 +83,7 @@ describe('CursorAcpProvider', () => {
 
     expect(spawn).toHaveBeenCalledWith(
       'agent',
-      ['--print'],
+      ['--print', '--trust'],
       expect.any(Object),
     );
   });
@@ -114,7 +114,7 @@ describe('CursorAcpProvider', () => {
     expect(ended).toBe(true);
     expect(spawn).toHaveBeenCalledWith(
       'agent',
-      ['--print', '--model', 'sonnet-4.6', '--output-format', 'stream-json', '--stream-partial-output'],
+      ['--print', '--trust', '--model', 'sonnet-4.6', '--output-format', 'stream-json', '--stream-partial-output'],
       expect.any(Object),
     );
   });
