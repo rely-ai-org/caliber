@@ -112,6 +112,12 @@ export class CursorAcpProvider implements LLMProvider {
             };
 
             if (event.type === 'assistant') {
+              // --stream-partial-output sends word-by-word deltas (with timestamp_ms)
+              // followed by a final event with the COMPLETE text (no timestamp_ms).
+              // Skip the final duplicate to prevent doubling the accumulated text.
+              const isDelta = 'timestamp_ms' in (event as Record<string, unknown>);
+              if (!isDelta) continue;
+
               const text = event.message?.content?.[0]?.text || event.content;
               if (text) callbacks.onText(text);
             } else if (event.type === 'result') {

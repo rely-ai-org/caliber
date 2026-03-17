@@ -90,8 +90,8 @@ describe('CursorAcpProvider', () => {
 
   it('stream() emits text from stream-json events', async () => {
     const events = [
-      JSON.stringify({ type: 'assistant', message: { content: [{ text: 'Hello' }] } }),
-      JSON.stringify({ type: 'assistant', message: { content: [{ text: ' World' }] } }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ text: 'Hello' }] }, timestamp_ms: 1 }),
+      JSON.stringify({ type: 'assistant', message: { content: [{ text: ' World' }] }, timestamp_ms: 2 }),
       JSON.stringify({ type: 'result', duration_ms: 100 }),
     ].join('\n') + '\n';
 
