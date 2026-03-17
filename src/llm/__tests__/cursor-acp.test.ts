@@ -11,6 +11,35 @@ vi.mock('node:child_process', () => ({
   execSync: (...args: unknown[]) => execSync(...args),
 }));
 
+function mockAcpAgent(chunks?: string[]) {
+  const stdout = new Readable({ read: () => {} });
+  const stdin = new Writable({
+    write(chunk: Buffer | string, _enc, cb) {
+      const str = chunk.toString();
+      for (const line of str.split('\n').filter(Boolean)) {
+        try {
+          const msg = JSON.parse(line) as { id?: number; method?: string };
+          if (msg.id == null) continue;
+          if (msg.method === 'initialize') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
+          else if (msg.method === 'authenticate') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
+          else if (msg.method === 'session/new') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 's' } }) + '\n');
+          else if (msg.method === 'session/prompt') {
+            for (const text of (chunks ?? [])) {
+              stdout.push(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { text } } } }) + '\n');
+            }
+            stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } }) + '\n');
+            stdout.push(null);
+          }
+        } catch {
+          // ignore
+        }
+      }
+      cb();
+    },
+  });
+  spawn.mockReturnValue({ stdin, stdout, stderr: process.stderr, on: vi.fn(), kill: vi.fn() });
+}
+
 describe('CursorAcpProvider', () => {
   const originalEnv = process.env;
 
@@ -26,50 +55,10 @@ describe('CursorAcpProvider', () => {
   });
 
   it('call() returns concatenated agent_message_chunk text when mock agent responds', async () => {
-    const stdout = new Readable({ read: () => {} });
-    const stdin = new Writable({
-      write(chunk: Buffer | string, _enc, cb) {
-        const str = chunk.toString();
-        const lines = str.split('\n').filter(Boolean);
-        for (const line of lines) {
-          try {
-            const msg = JSON.parse(line) as { id?: number; method?: string };
-            if (msg.id == null) continue;
-            if (msg.method === 'initialize') {
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
-            } else if (msg.method === 'authenticate') {
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
-            } else if (msg.method === 'session/new') {
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 'sess-1' } }) + '\n');
-            } else if (msg.method === 'session/prompt') {
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { text: 'Hello!' } } } }) + '\n');
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', method: 'session/update', params: { update: { sessionUpdate: 'agent_message_chunk', content: { text: ' World.' } } } }) + '\n');
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } }) + '\n');
-              stdout.push(null);
-            }
-          } catch {
-            // ignore
-          }
-        }
-        cb();
-      },
-    });
+    mockAcpAgent(['Hello!', ' World.']);
 
-    spawn.mockReturnValue({
-      stdin,
-      stdout,
-      stderr: process.stderr,
-      on: vi.fn(),
-      kill: vi.fn(),
-    });
-
-    const config: LLMConfig = { provider: 'cursor', model: 'default' };
-    const provider = new CursorAcpProvider(config);
-
-    const result = await provider.call({
-      system: 'You are a helper.',
-      prompt: 'Say hello.',
-    });
+    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'default' });
+    const result = await provider.call({ system: 'You are a helper.', prompt: 'Say hello.' });
 
     expect(result).toBe('Hello! World.');
     expect(spawn).toHaveBeenCalledWith('agent', ['acp'], expect.any(Object));
@@ -77,34 +66,39 @@ describe('CursorAcpProvider', () => {
 
   it('includes --api-key in spawn args when CURSOR_API_KEY is set', async () => {
     process.env.CURSOR_API_KEY = 'test-key';
-    const stdout = new Readable({ read: () => {} });
-    const stdin = new Writable({
-      write(chunk: Buffer | string, _enc, cb) {
-        const str = chunk.toString();
-        for (const line of str.split('\n').filter(Boolean)) {
-          try {
-            const msg = JSON.parse(line) as { id?: number; method?: string };
-            if (msg.id == null) continue;
-            if (msg.method === 'initialize') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
-            else if (msg.method === 'authenticate') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: {} }) + '\n');
-            else if (msg.method === 'session/new') stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { sessionId: 's' } }) + '\n');
-            else if (msg.method === 'session/prompt') {
-              stdout.push(JSON.stringify({ jsonrpc: '2.0', id: msg.id, result: { stopReason: 'end_turn' } }) + '\n');
-              stdout.push(null);
-            }
-          } catch {
-            // ignore
-          }
-        }
-        cb();
-      },
-    });
-    spawn.mockReturnValue({ stdin, stdout, stderr: process.stderr, on: vi.fn(), kill: vi.fn() });
+    mockAcpAgent();
 
     const provider = new CursorAcpProvider({ provider: 'cursor', model: 'default' });
     await provider.call({ system: 'S', prompt: 'P' });
 
     expect(spawn).toHaveBeenCalledWith('agent', ['--api-key', 'test-key', 'acp'], expect.any(Object));
+  });
+
+  it('includes --model before acp when a specific model is set', async () => {
+    mockAcpAgent();
+
+    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'opus-4.6' });
+    await provider.call({ system: 'S', prompt: 'P' });
+
+    expect(spawn).toHaveBeenCalledWith('agent', ['--model', 'opus-4.6', 'acp'], expect.any(Object));
+  });
+
+  it('does not include --model when model is "auto"', async () => {
+    mockAcpAgent();
+
+    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'auto' });
+    await provider.call({ system: 'S', prompt: 'P' });
+
+    expect(spawn).toHaveBeenCalledWith('agent', ['acp'], expect.any(Object));
+  });
+
+  it('per-call model overrides default model', async () => {
+    mockAcpAgent();
+
+    const provider = new CursorAcpProvider({ provider: 'cursor', model: 'auto' });
+    await provider.call({ system: 'S', prompt: 'P', model: 'sonnet-4.6' });
+
+    expect(spawn).toHaveBeenCalledWith('agent', ['--model', 'sonnet-4.6', 'acp'], expect.any(Object));
   });
 
   it('uses CURSOR_API_KEY from env when set', () => {

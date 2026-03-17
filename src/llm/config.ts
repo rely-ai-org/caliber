@@ -10,7 +10,7 @@ export const DEFAULT_MODELS: Record<ProviderType, string> = {
   anthropic: 'claude-sonnet-4-6',
   vertex: 'claude-sonnet-4-6',
   openai: 'gpt-4.1',
-  cursor: 'default',
+  cursor: 'auto',
   'claude-cli': 'default',
 };
 
@@ -116,11 +116,18 @@ export function getDisplayModel(config: { provider: string; model: string }): st
 
 export function getFastModel(): string | undefined {
   if (process.env.CALIBER_FAST_MODEL) return process.env.CALIBER_FAST_MODEL;
-  if (process.env.ANTHROPIC_SMALL_FAST_MODEL) return process.env.ANTHROPIC_SMALL_FAST_MODEL;
 
   const config = loadConfig();
+  const provider = config?.provider;
+
+  // ANTHROPIC_SMALL_FAST_MODEL only applies to Anthropic/Vertex (or when no provider is configured)
+  if (process.env.ANTHROPIC_SMALL_FAST_MODEL &&
+      (!provider || provider === 'anthropic' || provider === 'vertex')) {
+    return process.env.ANTHROPIC_SMALL_FAST_MODEL;
+  }
+
   if (config?.fastModel) return config.fastModel;
-  if (config?.provider) return DEFAULT_FAST_MODELS[config.provider];
+  if (provider) return DEFAULT_FAST_MODELS[provider];
 
   return undefined;
 }

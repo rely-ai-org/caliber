@@ -32,6 +32,7 @@ describe('detectProjectStack', () => {
   });
 
   it('falls back to ANTHROPIC_SMALL_FAST_MODEL for backwards compat', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-ant-test';
     process.env.ANTHROPIC_SMALL_FAST_MODEL = 'claude-haiku-4-5';
 
     await detectProjectStack(['src/index.ts'], {});

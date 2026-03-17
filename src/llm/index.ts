@@ -152,6 +152,9 @@ export async function validateModel(options?: { fast?: boolean }): Promise<void>
   const config = cachedConfig;
   if (!config) return;
 
+  // Seat-based providers use whatever model the service provides; skip validation
+  if (config.provider === 'cursor' || config.provider === 'claude-cli') return;
+
   const modelsToCheck = [config.model];
   if (options?.fast) {
     const { getFastModel } = await import('./config.js');

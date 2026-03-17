@@ -58,7 +58,11 @@ export class CursorAcpProvider implements LLMProvider {
   ): Promise<void> {
     const combinedPrompt = this.buildCombinedPrompt(options);
 
+    const model = options.model || this.defaultModel;
     const args = ['acp'];
+    if (model && model !== 'auto' && model !== 'default') {
+      args.unshift('--model', model);
+    }
     if (this.cursorApiKey) {
       args.unshift('--api-key', this.cursorApiKey);
     }

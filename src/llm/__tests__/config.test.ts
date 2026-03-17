@@ -336,6 +336,18 @@ describe('config', () => {
       expect(getFastModel()).toBeUndefined();
     });
 
+    it('ignores ANTHROPIC_SMALL_FAST_MODEL for cursor provider', () => {
+      process.env.CALIBER_USE_CURSOR_SEAT = '1';
+      process.env.ANTHROPIC_SMALL_FAST_MODEL = 'claude-haiku-4-5';
+      expect(getFastModel()).toBeUndefined();
+    });
+
+    it('ignores ANTHROPIC_SMALL_FAST_MODEL for openai provider', () => {
+      process.env.OPENAI_API_KEY = 'sk-test';
+      process.env.ANTHROPIC_SMALL_FAST_MODEL = 'claude-haiku-4-5';
+      expect(getFastModel()).toBe('gpt-4.1-mini');
+    });
+
     it('config file fastModel overrides provider default', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       // eslint-disable-next-line @typescript-eslint/no-explicit-any

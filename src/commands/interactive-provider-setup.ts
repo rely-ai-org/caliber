@@ -46,7 +46,7 @@ export async function runInteractiveProviderSetup(options?: {
       break;
     }
     case 'cursor': {
-      config.model = 'default';
+      config.model = DEFAULT_MODELS.cursor;
       if (!isCursorAgentAvailable()) {
         console.log(chalk.yellow('\n  Cursor Agent CLI not found.'));
         console.log(chalk.dim('  Install it: ') + chalk.hex('#83D1EB')('curl https://cursor.com/install -fsS | bash'));
