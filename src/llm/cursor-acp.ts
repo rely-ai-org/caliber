@@ -90,6 +90,7 @@ export class CursorAcpProvider implements LLMProvider {
       });
 
       let buffer = '';
+      let endCalled = false;
 
       child.stdout!.on('data', (data: Buffer) => {
         buffer += data.toString('utf-8');
@@ -102,16 +103,20 @@ export class CursorAcpProvider implements LLMProvider {
           try {
             const event = JSON.parse(line) as {
               type?: string;
+              subtype?: string;
               content?: string;
-              message?: { content?: Array<{ text?: string }> };
-              duration_ms?: number;
+              result?: string;
+              is_error?: boolean;
+              message?: { content?: Array<{ type?: string; text?: string }> };
             };
 
             if (event.type === 'assistant') {
               const text = event.message?.content?.[0]?.text || event.content;
               if (text) callbacks.onText(text);
             } else if (event.type === 'result') {
-              callbacks.onEnd({ stopReason: 'end_turn' });
+              endCalled = true;
+              const stopReason = event.is_error ? 'error' : 'end_turn';
+              callbacks.onEnd({ stopReason });
             }
           } catch {
             // Not JSON — treat as plain text
@@ -129,16 +134,22 @@ export class CursorAcpProvider implements LLMProvider {
         // Flush remaining buffer
         if (buffer.trim()) {
           try {
-            const event = JSON.parse(buffer) as { type?: string; content?: string; message?: { content?: Array<{ text?: string }> }; duration_ms?: number };
+            const event = JSON.parse(buffer) as { type?: string; content?: string; result?: string; is_error?: boolean; message?: { content?: Array<{ type?: string; text?: string }> } };
             if (event.type === 'assistant') {
               const text = event.message?.content?.[0]?.text || event.content;
               if (text) callbacks.onText(text);
             } else if (event.type === 'result') {
-              callbacks.onEnd({ stopReason: 'end_turn' });
+              endCalled = true;
+              callbacks.onEnd({ stopReason: event.is_error ? 'error' : 'end_turn' });
             }
           } catch {
             callbacks.onText(buffer);
           }
+        }
+
+        // Ensure onEnd is called even if no result event was received
+        if (!endCalled) {
+          callbacks.onEnd({ stopReason: code === 0 ? 'end_turn' : 'error' });
         }
 
         if (code !== 0 && code !== null) {
@@ -158,17 +169,16 @@ export class CursorAcpProvider implements LLMProvider {
   private buildPrompt(options: LLMCallOptions | LLMStreamOptions): string {
     const streamOpts = options as LLMStreamOptions;
     const hasHistory = streamOpts.messages && streamOpts.messages.length > 0;
-    let combined = '';
-
-    combined += '[[System]]\n' + options.system + '\n\n';
+    let combined = options.system + '\n\n';
 
     if (hasHistory) {
       for (const msg of streamOpts.messages!) {
-        combined += `[[${msg.role === 'user' ? 'User' : 'Assistant'}]]\n${msg.content}\n\n`;
+        const label = msg.role === 'user' ? 'User' : 'Assistant';
+        combined += `${label}: ${msg.content}\n\n`;
       }
     }
 
-    combined += '[[User]]\n' + options.prompt;
+    combined += options.prompt;
     return combined;
   }
 }
