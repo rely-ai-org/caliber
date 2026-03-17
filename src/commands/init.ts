@@ -228,7 +228,7 @@ export async function initCommand(options: InitOptions) {
   const display = new ParallelTaskDisplay();
   const TASK_STACK = display.add('Detecting project stack');
   const TASK_CONFIG = display.add('Generating configs');
-  const TASK_SKILLS_GEN = display.add('Generating skills');
+  const TASK_SKILLS_GEN = display.add('Generating skills', { depth: 1 });
   const TASK_SKILLS_SEARCH = wantsSkills ? display.add('Searching community skills') : -1;
   const TASK_SCORE_REFINE = display.add('Validating & refining setup');
   display.start();
@@ -264,44 +264,51 @@ export async function initCommand(options: InitOptions) {
       display.start();
     }
 
-    // Evaluate dismissals before generation (updates baseline consistently)
-    const failingForDismissal = baselineScore.checks.filter(c => !c.passed && c.maxPoints > 0);
-    if (failingForDismissal.length > 0) {
-      const newDismissals = await evaluateDismissals(failingForDismissal, fingerprint);
-      if (newDismissals.length > 0) {
-        const existing = readDismissedChecks();
-        const existingIds = new Set(existing.map(d => d.id));
-        const merged = [...existing, ...newDismissals.filter(d => !existingIds.has(d.id))];
-        writeDismissedChecks(merged);
-        baselineScore = computeLocalScore(process.cwd(), targetAgent);
-      }
-    }
-
-    // Determine targeted fix mode
-    let failingChecks: FailingCheck[] | undefined;
-    let passingChecks: PassingCheck[] | undefined;
-    let currentScore: number | undefined;
-
-    if (hasExistingConfig && baselineScore.score >= 95 && !options.force) {
-      const currentLlmFixable = baselineScore.checks
-        .filter(c => !c.passed && c.maxPoints > 0 && !NON_LLM_CHECKS.has(c.id));
-      failingChecks = currentLlmFixable
-        .map(c => ({ name: c.name, suggestion: c.suggestion, fix: c.fix }));
-      passingChecks = baselineScore.checks
-        .filter(c => c.passed)
-        .map(c => ({ name: c.name }));
-      currentScore = baselineScore.score;
-    }
-
-    if (report) {
-      const fullPrompt = buildGeneratePrompt(fingerprint, targetAgent, fingerprint.description, failingChecks, currentScore, passingChecks);
-      report.addCodeBlock('Generation: Full LLM Prompt', fullPrompt);
-    }
-
-    // Phase B: Generate + search in parallel
+    // Phase B: Generate (with dismissals) + search in parallel
+    // Search is independent of dismissals so it starts immediately.
+    // Dismissals fold into the "Generating configs" spinner as status text.
     display.update(TASK_CONFIG, 'running');
 
     const generatePromise = (async () => {
+      // Evaluate dismissals (shown as config status, non-fatal)
+      const failingForDismissal = baselineScore.checks.filter(c => !c.passed && c.maxPoints > 0);
+      if (failingForDismissal.length > 0) {
+        display.update(TASK_CONFIG, 'running', 'Evaluating baseline checks...');
+        try {
+          const newDismissals = await evaluateDismissals(failingForDismissal, fingerprint);
+          if (newDismissals.length > 0) {
+            const existing = readDismissedChecks();
+            const existingIds = new Set(existing.map(d => d.id));
+            const merged = [...existing, ...newDismissals.filter(d => !existingIds.has(d.id))];
+            writeDismissedChecks(merged);
+            baselineScore = computeLocalScore(process.cwd(), targetAgent);
+          }
+        } catch {
+          display.update(TASK_CONFIG, 'running', 'Skipped dismissal evaluation');
+        }
+      }
+
+      // Determine targeted fix mode
+      let failingChecks: FailingCheck[] | undefined;
+      let passingChecks: PassingCheck[] | undefined;
+      let currentScore: number | undefined;
+
+      if (hasExistingConfig && baselineScore.score >= 95 && !options.force) {
+        const currentLlmFixable = baselineScore.checks
+          .filter(c => !c.passed && c.maxPoints > 0 && !NON_LLM_CHECKS.has(c.id));
+        failingChecks = currentLlmFixable
+          .map(c => ({ name: c.name, suggestion: c.suggestion, fix: c.fix }));
+        passingChecks = baselineScore.checks
+          .filter(c => c.passed)
+          .map(c => ({ name: c.name }));
+        currentScore = baselineScore.score;
+      }
+
+      if (report) {
+        const fullPrompt = buildGeneratePrompt(fingerprint, targetAgent, fingerprint.description, failingChecks, currentScore, passingChecks);
+        report.addCodeBlock('Generation: Full LLM Prompt', fullPrompt);
+      }
+
       const result = await generateSetup(
         fingerprint,
         targetAgent,

@@ -7,6 +7,7 @@ interface TaskState {
   name: string;
   status: TaskStatus;
   message: string;
+  depth: number;
   startTime?: number;
   endTime?: number;
 }
@@ -34,9 +35,9 @@ export class ParallelTaskDisplay {
   private cachedCardIndex = -1;
   private cachedCardCols = -1;
 
-  add(name: string): number {
+  add(name: string, options?: { depth?: number }): number {
     const index = this.tasks.length;
-    this.tasks.push({ name, status: 'pending', message: '' });
+    this.tasks.push({ name, status: 'pending', message: '', depth: options?.depth ?? 0 });
     return index;
   }
 
@@ -197,13 +198,14 @@ export class ParallelTaskDisplay {
         break;
     }
 
-    const paddedName = task.name.padEnd(NAME_COL_WIDTH);
-    // icon(1) + space(1) + name(NAME_COL_WIDTH) + time
-    const usedByFixed = PREFIX.length + 2 + NAME_COL_WIDTH + timePlain.length;
+    const indent = '  '.repeat(task.depth);
+    const paddedName = task.name.padEnd(Math.max(0, NAME_COL_WIDTH - indent.length));
+    // icon(1) + space(1) + indent + name(padded) + time
+    const usedByFixed = PREFIX.length + indent.length + 2 + NAME_COL_WIDTH + timePlain.length;
     const msgMax = Math.max(cols - usedByFixed - 2, 10);
     const msg = task.message ? this.smartTruncate(task.message, msgMax) : '';
 
-    return `${PREFIX}${icon} ${nameStyle(paddedName)}${msg ? msgStyle(msg) : ''}${timeStr}`;
+    return `${PREFIX}${indent}${icon} ${nameStyle(paddedName)}${msg ? msgStyle(msg) : ''}${timeStr}`;
   }
 
   private draw(initial: boolean): void {
