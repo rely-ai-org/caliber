@@ -1,3 +1,11 @@
+## v1.22.1 (2026-03-17)
+
+### Bug Fixes
+
+- **init**: eliminate UI lag between fingerprint and generation steps
+- **claude-cli**: respect ANTHROPIC_SMALL_FAST_MODEL env var for fast model resolution
+- **init**: cap prompt size and smart file tree sampling for large repos
+
 ## v1.22.0 (2026-03-17)
 
 ### Features
