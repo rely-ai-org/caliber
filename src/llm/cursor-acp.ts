@@ -1,4 +1,5 @@
 import { spawn, execSync, type ChildProcess } from 'node:child_process';
+import os from 'node:os';
 import type { LLMProvider, LLMCallOptions, LLMStreamOptions, LLMStreamCallbacks, LLMConfig } from './types.js';
 
 const AGENT_BIN = 'agent';
@@ -32,7 +33,7 @@ export class CursorAcpProvider implements LLMProvider {
   }
 
   private buildArgs(model: string, streaming: boolean): string[] {
-    const args = ['--print', '--trust'];
+    const args = ['--print', '--trust', '--workspace', os.tmpdir()];
 
     if (model && model !== 'auto' && model !== 'default') {
       args.push('--model', model);
