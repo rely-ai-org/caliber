@@ -3,9 +3,9 @@
     "title": "Welcome to Caliber!",
     "icon": "?",
     "lines": [
-      "Caliber is your agentic development companion.",
-      "It analyzes your repository, understands how you work,",
-      "and adapts your AI agent to fit you and your project."
+      "Caliber is your AI agent's memory. It analyzes your repo,",
+      "learns from every session, and keeps your agent context",
+      "fresh, grounded, and personal to your project."
     ]
   },
   {
@@ -36,6 +36,24 @@
     ]
   },
   {
+    "title": "Learns from Every Session",
+    "icon": "\u2B50",
+    "lines": [
+      "Caliber watches your agent work. When something goes wrong",
+      "\u2014 a tool fails, you correct a mistake \u2014 it captures the",
+      "lesson so the same mistake never happens twice."
+    ]
+  },
+  {
+    "title": "Gets Smarter Over Time",
+    "icon": "\uD83E\uDDE0",
+    "lines": [
+      "Learnings accumulate in CALIBER_LEARNINGS.md and feed back",
+      "into your configs automatically. The more you use your agent,",
+      "the better it gets. Your whole team benefits."
+    ]
+  },
+  {
     "title": "Stays in Sync",
     "icon": "\u21BB",
     "lines": [
@@ -45,12 +63,21 @@
     ]
   },
   {
-    "title": "Measures Itself",
+    "title": "Runs in CI",
+    "icon": "\u2713",
+    "lines": [
+      "Add Caliber to your GitHub pipeline. It scores every PR,",
+      "catches config drift, and blocks merges when agent quality",
+      "drops. `caliber score --compare main` shows the delta."
+    ]
+  },
+  {
+    "title": "Measures What Matters",
     "icon": "\u2605",
     "lines": [
-      "`caliber score` checks how well your setup serves the agent \u2014",
-      "grounding, accuracy, freshness \u2014 and gives a letter grade.",
-      "Aim for an A to get the most out of your AI agent."
+      "`caliber score` checks config quality \u2014 grounding, accuracy,",
+      "freshness. `caliber insights` goes further: task success rate,",
+      "failure trends, and proof that your agent is improving."
     ]
   }
 ]
