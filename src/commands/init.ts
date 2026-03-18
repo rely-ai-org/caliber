@@ -239,11 +239,12 @@ export async function initCommand(options: InitOptions) {
     display.update(TASK_STACK, 'running');
     fingerprint = await collectFingerprint(process.cwd());
 
-    const stackSummary = [
-      ...fingerprint.languages,
-      ...fingerprint.frameworks,
-    ].join(', ') || 'no languages';
-    display.update(TASK_STACK, 'done', stackSummary);
+    const stackParts = [...fingerprint.languages, ...fingerprint.frameworks];
+    const stackSummary = stackParts.join(', ') || 'no languages';
+    const largeRepoNote = fingerprint.fileTree.length > 5000
+      ? ` (${fingerprint.fileTree.length.toLocaleString()} files, smart sampling active)`
+      : '';
+    display.update(TASK_STACK, 'done', stackSummary + largeRepoNote);
 
     trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
     log(options.verbose, `Fingerprint: ${fingerprint.languages.length} languages, ${fingerprint.frameworks.length} frameworks, ${fingerprint.fileTree.length} files`);
