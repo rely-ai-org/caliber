@@ -1,29 +1,21 @@
 import path from 'path';
 import chalk from 'chalk';
-import ora from 'ora';
-import select from '@inquirer/select';
-import checkbox from '@inquirer/checkbox';
 import fs from 'fs';
 import { collectFingerprint, type Fingerprint } from '../fingerprint/index.js';
 import { generateSetup, generateSkillsForSetup } from '../ai/generate.js';
-import { refineSetup } from '../ai/refine.js';
 import { writeSetup, undoSetup } from '../writers/index.js';
 import { stageFiles, cleanupStaging } from '../writers/staging.js';
-import { promptReviewMethod, openReview } from '../utils/review.js';
 import { collectSetupFiles } from './setup-files.js';
 import { installHook, installPreCommitHook } from '../lib/hooks.js';
 import { installLearningHooks, installCursorLearningHooks } from '../lib/learning-hooks.js';
 import { writeState, getCurrentHeadSha } from '../lib/state.js';
-import { SpinnerMessages, REFINE_MESSAGES } from '../utils/spinner-messages.js';
 import { promptInput } from '../utils/prompt.js';
 import { loadConfig, getFastModel, getDisplayModel } from '../llm/config.js';
-import { llmJsonCall, validateModel, getUsageSummary } from '../llm/index.js';
+import { validateModel } from '../llm/index.js';
 import { runInteractiveProviderSetup } from './interactive-provider-setup.js';
 import { computeLocalScore } from '../scoring/index.js';
-import type { Check } from '../scoring/index.js';
 import { displayScoreSummary, displayScoreDelta } from '../scoring/display.js';
 import { readDismissedChecks, writeDismissedChecks } from '../scoring/dismissed.js';
-import type { DismissedCheck } from '../scoring/dismissed.js';
 import { searchSkills, selectSkills, installSkills } from './recommend.js';
 import type { SkillSearchResult } from './recommend.js';
 import type { FailingCheck, PassingCheck } from '../ai/generate.js';
@@ -47,7 +39,12 @@ import {
   trackInitLearnEnabled,
 } from '../telemetry/events.js';
 
-type TargetAgent = ('claude' | 'cursor' | 'codex')[];
+import { detectAgents, promptAgent, promptHookType, promptLearnInstall, promptReviewAction, refineLoop } from './init-prompts.js';
+import type { TargetAgent, HookChoice } from './init-prompts.js';
+import { formatProjectPreview, formatWhatChanged, printSetupSummary, displayTokenUsage } from './init-display.js';
+import { isFirstRun, summarizeSetup, ensurePermissions, writeErrorLog, evaluateDismissals } from './init-helpers.js';
+
+export type { TargetAgent };
 
 interface InitOptions {
   agent?: TargetAgent;
@@ -66,7 +63,10 @@ function log(verbose: boolean | undefined, ...args: unknown[]): void {
 export async function initCommand(options: InitOptions) {
   const brand = chalk.hex('#EB9D83');
   const title = chalk.hex('#83D1EB');
-  console.log(brand.bold(`
+  const firstRun = isFirstRun(process.cwd());
+
+  if (firstRun) {
+    console.log(brand.bold(`
    ██████╗ █████╗ ██╗     ██╗██████╗ ███████╗██████╗
   ██╔════╝██╔══██╗██║     ██║██╔══██╗██╔════╝██╔══██╗
   ██║     ███████║██║     ██║██████╔╝█████╗  ██████╔╝
@@ -74,16 +74,19 @@ export async function initCommand(options: InitOptions) {
   ╚██████╗██║  ██║███████╗██║██████╔╝███████╗██║  ██║
    ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
   `));
-  console.log(chalk.dim('  Scan your project and generate tailored config files for'));
-  console.log(chalk.dim('  Claude Code, Cursor, and Codex.\n'));
+    console.log(chalk.dim('  Scan your project and generate tailored config files for'));
+    console.log(chalk.dim('  Claude Code, Cursor, and Codex.\n'));
+
+    console.log(title.bold('  How it works:\n'));
+    console.log(chalk.dim('  1. Setup      Connect your LLM provider and select your agents'));
+    console.log(chalk.dim('  2. Engine     Detect stack, generate configs & skills in parallel'));
+    console.log(chalk.dim('  3. Review     See all changes — accept, refine, or decline'));
+    console.log(chalk.dim('  4. Finalize   Score check and auto-sync hooks\n'));
+  } else {
+    console.log(brand.bold('\n  CALIBER') + chalk.dim('  — regenerating config\n'));
+  }
 
   const report = options.debugReport ? new DebugReport() : null;
-
-  console.log(title.bold('  How it works:\n'));
-  console.log(chalk.dim('  1. Setup      Connect your LLM provider and select your agents'));
-  console.log(chalk.dim('  2. Engine     Detect stack, generate configs & skills in parallel'));
-  console.log(chalk.dim('  3. Review     See all changes — accept, refine, or decline'));
-  console.log(chalk.dim('  4. Finalize   Score check and auto-sync hooks\n'));
 
   // ───────────────────────────────────────────────────────────────────────────
   // Step 1 — Setup
@@ -104,7 +107,7 @@ export async function initCommand(options: InitOptions) {
     }
     console.log(chalk.green('  ✓ Provider saved\n'));
   }
-  trackInitProviderSelected(config.provider, config.model);
+  trackInitProviderSelected(config.provider, config.model, firstRun);
   const displayModel = getDisplayModel(config);
   const fastModel = getFastModel();
   const modelLine = fastModel
@@ -119,32 +122,22 @@ export async function initCommand(options: InitOptions) {
 
   await validateModel({ fast: true });
 
-  // 1b. Pick target agents
+  // 1b. Pick target agents (auto-detect from existing dirs)
   let targetAgent: TargetAgent;
+  const agentAutoDetected = !options.agent;
   if (options.agent) {
     targetAgent = options.agent;
   } else if (options.autoApprove) {
     targetAgent = ['claude'];
     log(options.verbose, 'Auto-approve: defaulting to claude agent');
   } else {
-    targetAgent = await promptAgent();
+    const detected = detectAgents(process.cwd());
+    targetAgent = await promptAgent(detected.length > 0 ? detected : undefined);
   }
   console.log(chalk.dim(`  Target: ${targetAgent.join(', ')}\n`));
-  trackInitAgentSelected(targetAgent);
+  trackInitAgentSelected(targetAgent, agentAutoDetected);
 
-  // 1c. Community skills question
-  let wantsSkills = false;
-  if (!options.autoApprove) {
-    wantsSkills = await select({
-      message: 'Discover community-maintained skills that match your stack?',
-      choices: [
-        { name: 'Yes, find skills for my project', value: true },
-        { name: 'Skip for now', value: false },
-      ],
-    });
-  }
-
-  // 1d. Compute & show initial score
+  // 1c. Compute & show initial score
   let baselineScore = computeLocalScore(process.cwd(), targetAgent);
   console.log(chalk.dim('\n  Current setup score:'));
   displayScoreSummary(baselineScore);
@@ -224,12 +217,13 @@ export async function initCommand(options: InitOptions) {
   let genStopReason: string | undefined;
   let skillSearchResult: SkillSearchResult = { results: [], contentMap: new Map() };
   let fingerprint!: Fingerprint;
+  const sessionHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
 
   const display = new ParallelTaskDisplay();
   const TASK_STACK = display.add('Detecting project stack', { pipelineLabel: 'Scan' });
   const TASK_CONFIG = display.add('Generating configs', { depth: 1, pipelineLabel: 'Generate' });
   const TASK_SKILLS_GEN = display.add('Generating skills', { depth: 2, pipelineLabel: 'Skills' });
-  const TASK_SKILLS_SEARCH = wantsSkills ? display.add('Searching community skills', { depth: 1, pipelineLabel: 'Search', pipelineRow: 1 }) : -1;
+  const TASK_SKILLS_SEARCH = display.add('Searching community skills', { depth: 1, pipelineLabel: 'Search', pipelineRow: 1 });
   const TASK_SCORE_REFINE = display.add('Validating & refining setup', { pipelineLabel: 'Validate' });
   display.start();
   display.enableWaitingContent();
@@ -249,6 +243,10 @@ export async function initCommand(options: InitOptions) {
     trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
     log(options.verbose, `Fingerprint: ${fingerprint.languages.length} languages, ${fingerprint.frameworks.length} frameworks, ${fingerprint.fileTree.length} files`);
 
+    // Project understanding preview
+    const preview = formatProjectPreview(fingerprint);
+    display.setPreviewContent([`  ${chalk.green('✓')} ${preview}`]);
+
     if (report) {
       report.addJson('Fingerprint: Git', { remote: fingerprint.gitRemoteUrl, packageName: fingerprint.packageName });
       report.addCodeBlock('Fingerprint: File Tree', fingerprint.fileTree.join('\n'));
@@ -265,13 +263,10 @@ export async function initCommand(options: InitOptions) {
       display.start();
     }
 
-    // Phase B: Generate (with dismissals) + search in parallel
-    // Search is independent of dismissals so it starts immediately.
-    // Dismissals fold into the "Generating configs" spinner as status text.
+    // Phase B: Generate + search in parallel (search always runs)
     display.update(TASK_CONFIG, 'running');
 
     const generatePromise = (async () => {
-      // Evaluate dismissals (shown as config status, non-fatal)
       let localBaseline = baselineScore;
       const failingForDismissal = localBaseline.checks.filter(c => !c.passed && c.maxPoints > 0);
       if (failingForDismissal.length > 0) {
@@ -290,7 +285,6 @@ export async function initCommand(options: InitOptions) {
         }
       }
 
-      // Determine targeted fix mode
       let failingChecks: FailingCheck[] | undefined;
       let passingChecks: PassingCheck[] | undefined;
       let currentScore: number | undefined;
@@ -319,6 +313,12 @@ export async function initCommand(options: InitOptions) {
           onStatus: (status) => display.update(TASK_CONFIG, 'running', status),
           onComplete: (setup) => { generatedSetup = setup; },
           onError: (error) => display.update(TASK_CONFIG, 'failed', error),
+          onContent: (text) => {
+            const lines = text.split('\n').filter(l => l.trim()).slice(-8);
+            if (lines.length > 0) {
+              display.setPreviewContent(lines.map(l => `  ${chalk.dim(l.slice(0, 80))}`));
+            }
+          },
         },
         failingChecks,
         currentScore,
@@ -348,8 +348,9 @@ export async function initCommand(options: InitOptions) {
       display.update(TASK_SKILLS_GEN, 'done', `${skillCount} skills`);
     })();
 
+    // Community skills search always runs in parallel (deferred — no upfront prompt)
     const SEARCH_TIMEOUT_MS = 120_000;
-    const searchPromise = wantsSkills ? (async () => {
+    const searchPromise = (async () => {
       display.update(TASK_SKILLS_SEARCH, 'running');
       try {
         const searchWithTimeout = Promise.race([
@@ -369,14 +370,14 @@ export async function initCommand(options: InitOptions) {
         const reason = err instanceof Error && err.message === 'timeout' ? 'Timed out' : 'Search failed';
         display.update(TASK_SKILLS_SEARCH, 'failed', reason);
       }
-    })() : Promise.resolve();
+    })();
 
     await Promise.all([generatePromise, searchPromise]);
 
     // Phase D: Score-based auto-refinement
     if (generatedSetup) {
       display.update(TASK_SCORE_REFINE, 'running');
-      const sessionHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+      display.setPreviewContent([]);
       sessionHistory.push({
         role: 'assistant',
         content: summarizeSetup('Initial generation', generatedSetup),
@@ -432,12 +433,6 @@ export async function initCommand(options: InitOptions) {
 
   log(options.verbose, `Generation completed: ${elapsedMs}ms, stopReason: ${genStopReason || 'end_turn'}`);
 
-  const sessionHistory: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-  sessionHistory.push({
-    role: 'assistant',
-    content: summarizeSetup('Initial generation', generatedSetup),
-  });
-
   // ───────────────────────────────────────────────────────────────────────────
   // Step 3 — Review
   // ───────────────────────────────────────────────────────────────────────────
@@ -447,6 +442,16 @@ export async function initCommand(options: InitOptions) {
   const staged = stageFiles(setupFiles, process.cwd());
 
   const totalChanges = staged.newFiles + staged.modifiedFiles;
+
+  // "What changed" summary
+  const changes = formatWhatChanged(generatedSetup);
+  if (changes.length > 0) {
+    for (const line of changes) {
+      console.log(`  ${chalk.dim('•')} ${line}`);
+    }
+    console.log('');
+  }
+
   console.log(chalk.dim(`  ${chalk.green(`${staged.newFiles} new`)} / ${chalk.yellow(`${staged.modifiedFiles} modified`)} file${totalChanges !== 1 ? 's' : ''}`));
 
   if (skillSearchResult.results.length > 0) {
@@ -467,29 +472,21 @@ export async function initCommand(options: InitOptions) {
     action = 'accept';
     trackInitReviewAction(action, 'auto-approved');
   } else {
-    if (totalChanges > 0) {
-      const reviewChoice = await select({
-        message: 'Review your tailored setup?',
-        choices: [
-          { name: 'Yes, show me the diffs', value: 'review' as const },
-          ...(hasSkillResults ? [{ name: `No, continue to community skills (${skillSearchResult.results.length} found)`, value: 'skip' as const }] : []),
-          { name: 'No, continue', value: 'skip' as const },
-        ],
-      });
-      if (reviewChoice === 'review') {
-        const reviewMethod = await promptReviewMethod();
-        await openReview(reviewMethod, staged.stagedFiles);
-      }
-    }
-
-    action = await promptReviewAction(hasSkillResults);
+    // Single consolidated review prompt
+    printSetupSummary(generatedSetup);
+    action = await promptReviewAction(hasSkillResults, totalChanges > 0, staged);
     trackInitReviewAction(action, totalChanges > 0 ? 'reviewed' : 'skipped');
   }
 
   let refinementRound = 0;
   while (action === 'refine') {
     refinementRound++;
-    generatedSetup = await refineLoop(generatedSetup, targetAgent, sessionHistory);
+    generatedSetup = await refineLoop(
+      generatedSetup,
+      sessionHistory,
+      summarizeSetup,
+      printSetupSummary,
+    );
     trackInitRefinementRound(refinementRound, !!generatedSetup);
     if (!generatedSetup) {
       cleanupStaging();
@@ -500,8 +497,10 @@ export async function initCommand(options: InitOptions) {
     const restaged = stageFiles(updatedFiles, process.cwd());
     console.log(chalk.dim(`  ${chalk.green(`${restaged.newFiles} new`)} / ${chalk.yellow(`${restaged.modifiedFiles} modified`)} file${restaged.newFiles + restaged.modifiedFiles !== 1 ? 's' : ''}\n`));
     printSetupSummary(generatedSetup);
-    await openReview('terminal', restaged.stagedFiles);
-    action = await promptReviewAction(hasSkillResults);
+
+    const { openReview: openRev } = await import('../utils/review.js');
+    await openRev('terminal', restaged.stagedFiles);
+    action = await promptReviewAction(hasSkillResults, true, undefined);
     trackInitReviewAction(action, 'terminal');
   }
 
@@ -524,6 +523,7 @@ export async function initCommand(options: InitOptions) {
     return;
   }
 
+  const { default: ora } = await import('ora');
   const writeSpinner = ora('Writing config files...').start();
   try {
     if (targetAgent.includes('codex') && !fs.existsSync('AGENTS.md') && !generatedSetup.codex) {
@@ -605,7 +605,7 @@ export async function initCommand(options: InitOptions) {
     }
   }
 
-  // Community skills selection (after score check passes)
+  // Community skills selection (deferred — offered at end if results were found)
   let communitySkillsInstalled = 0;
   if (skillSearchResult.results.length > 0 && !options.autoApprove) {
     console.log(chalk.dim('  Community skills matched to your project:\n'));
@@ -617,45 +617,73 @@ export async function initCommand(options: InitOptions) {
     }
   }
 
-  // Auto-sync hooks
+  // Auto-sync hooks (smart defaults: auto-install pre-commit on first run)
   console.log('');
   let hookChoice: HookChoice;
   if (options.autoApprove) {
     hookChoice = 'skip';
     log(options.verbose, 'Auto-approve: skipping hook installation');
-  } else {
-    hookChoice = await promptHookType(targetAgent);
-  }
-  trackInitHookSelected(hookChoice);
-
-  if (hookChoice === 'claude' || hookChoice === 'both') {
-    const hookResult = installHook();
-    if (hookResult.installed) {
-      console.log(`  ${chalk.green('✓')} Claude Code hook installed — docs update on session end`);
-      console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
-    } else if (hookResult.alreadyInstalled) {
-      console.log(chalk.dim('  Claude Code hook already installed'));
-    }
-
-  }
-
-  if (hookChoice === 'precommit' || hookChoice === 'both') {
+  } else if (firstRun) {
+    // Auto-install pre-commit hook on first run
     const precommitResult = installPreCommitHook();
     if (precommitResult.installed) {
       console.log(`  ${chalk.green('✓')} Pre-commit hook installed — docs refresh before each commit`);
       console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
+      hookChoice = 'precommit';
     } else if (precommitResult.alreadyInstalled) {
       console.log(chalk.dim('  Pre-commit hook already installed'));
+      hookChoice = 'precommit';
     } else {
-      console.log(chalk.yellow('  Could not install pre-commit hook (not a git repository?)'));
+      hookChoice = 'skip';
+    }
+
+    // Ask about Claude hook only if Claude is a target
+    if (targetAgent.includes('claude')) {
+      const { default: select } = await import('@inquirer/select');
+      const wantsClaude = await select({
+        message: 'Also install Claude Code session hook? (auto-refresh on session end)',
+        choices: [
+          { name: 'Yes', value: true },
+          { name: 'No', value: false },
+        ],
+      });
+      if (wantsClaude) {
+        const hookResult = installHook();
+        if (hookResult.installed) {
+          console.log(`  ${chalk.green('✓')} Claude Code hook installed`);
+        }
+        hookChoice = hookChoice === 'precommit' ? 'both' : 'claude';
+      }
+    }
+  } else {
+    hookChoice = await promptHookType(targetAgent);
+    if (hookChoice === 'claude' || hookChoice === 'both') {
+      const hookResult = installHook();
+      if (hookResult.installed) {
+        console.log(`  ${chalk.green('✓')} Claude Code hook installed — docs update on session end`);
+        console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
+      } else if (hookResult.alreadyInstalled) {
+        console.log(chalk.dim('  Claude Code hook already installed'));
+      }
+    }
+    if (hookChoice === 'precommit' || hookChoice === 'both') {
+      const precommitResult = installPreCommitHook();
+      if (precommitResult.installed) {
+        console.log(`  ${chalk.green('✓')} Pre-commit hook installed — docs refresh before each commit`);
+        console.log(chalk.dim('    Run ') + chalk.hex('#83D1EB')('caliber hooks --remove') + chalk.dim(' to disable'));
+      } else if (precommitResult.alreadyInstalled) {
+        console.log(chalk.dim('  Pre-commit hook already installed'));
+      } else {
+        console.log(chalk.yellow('  Could not install pre-commit hook (not a git repository?)'));
+      }
+    }
+    if (hookChoice === 'skip') {
+      console.log(chalk.dim('  Skipped auto-sync hooks. Run ') + chalk.hex('#83D1EB')('caliber hooks --install') + chalk.dim(' later to enable.'));
     }
   }
+  trackInitHookSelected(hookChoice);
 
-  if (hookChoice === 'skip') {
-    console.log(chalk.dim('  Skipped auto-sync hooks. Run ') + chalk.hex('#83D1EB')('caliber hooks --install') + chalk.dim(' later to enable.'));
-  }
-
-  // Session Learning prompt (only for agents that support it)
+  // Session Learning prompt
   const hasLearnableAgent = targetAgent.includes('claude') || targetAgent.includes('cursor');
   let enableLearn = false;
   if (hasLearnableAgent) {
@@ -694,10 +722,8 @@ export async function initCommand(options: InitOptions) {
 
   console.log(chalk.bold('  What was set up:\n'));
 
-  // Score
   console.log(`    ${done}  Config generated          ${title('caliber score')} ${chalk.dim('for full breakdown')}`);
 
-  // Hooks
   const hooksInstalled = hookChoice !== 'skip';
   if (hooksInstalled) {
     const hookLabel = hookChoice === 'both' ? 'pre-commit + Claude Code' : hookChoice === 'precommit' ? 'pre-commit' : 'Claude Code';
@@ -706,7 +732,6 @@ export async function initCommand(options: InitOptions) {
     console.log(`    ${skip}  Auto-sync hooks           ${title('caliber hooks --install')} to enable later`);
   }
 
-  // Learning
   if (hasLearnableAgent) {
     if (enableLearn) {
       console.log(`    ${done}  Session learning          ${chalk.dim('agent learns from your feedback')}`);
@@ -715,7 +740,6 @@ export async function initCommand(options: InitOptions) {
     }
   }
 
-  // Community skills
   if (communitySkillsInstalled > 0) {
     console.log(`    ${done}  Community skills          ${chalk.dim(`${communitySkillsInstalled} skill${communitySkillsInstalled > 1 ? 's' : ''} installed for your stack`)}`);
   } else if (skillSearchResult.results.length > 0) {
@@ -737,429 +761,5 @@ export async function initCommand(options: InitOptions) {
     const reportPath = path.join(process.cwd(), '.caliber', 'debug-report.md');
     report.write(reportPath);
     console.log(chalk.dim(`  Debug report written to ${path.relative(process.cwd(), reportPath)}\n`));
-  }
-}
-
-async function refineLoop(
-  currentSetup: Record<string, unknown>,
-  _targetAgent: TargetAgent,
-  sessionHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
-): Promise<Record<string, unknown> | null> {
-  while (true) {
-    const message = await promptInput('\nWhat would you like to change?');
-    if (!message || message.toLowerCase() === 'done' || message.toLowerCase() === 'accept') {
-      return currentSetup;
-    }
-    if (message.toLowerCase() === 'cancel') {
-      return null;
-    }
-
-    const isValid = await classifyRefineIntent(message);
-    if (!isValid) {
-      console.log(chalk.dim('  This doesn\'t look like a config change request.'));
-      console.log(chalk.dim('  Describe what to add, remove, or modify in your configs.'));
-      console.log(chalk.dim('  Type "done" to accept the current setup.\n'));
-      continue;
-    }
-
-    const refineSpinner = ora('Refining setup...').start();
-    const refineMessages = new SpinnerMessages(refineSpinner, REFINE_MESSAGES);
-    refineMessages.start();
-
-    const refined = await refineSetup(
-      currentSetup,
-      message,
-      sessionHistory,
-    );
-
-    refineMessages.stop();
-
-    if (refined) {
-      currentSetup = refined;
-      sessionHistory.push({ role: 'user', content: message });
-      sessionHistory.push({
-        role: 'assistant',
-        content: summarizeSetup('Applied changes', refined),
-      });
-      refineSpinner.succeed('Setup updated');
-      printSetupSummary(refined);
-      console.log(chalk.dim('Type "done" to accept, or describe more changes.'));
-    } else {
-      refineSpinner.fail('Refinement failed — could not parse AI response.');
-      console.log(chalk.dim('Try rephrasing your request, or type "done" to keep the current setup.'));
-    }
-  }
-}
-
-function summarizeSetup(action: string, setup: Record<string, unknown>): string {
-  const descriptions = setup.fileDescriptions as Record<string, string> | undefined;
-  const files = descriptions
-    ? Object.entries(descriptions).map(([path, desc]) => `  ${path}: ${desc}`).join('\n')
-    : Object.keys(setup).filter(k => k !== 'targetAgent' && k !== 'fileDescriptions').join(', ');
-  return `${action}. Files:\n${files}`;
-}
-
-async function classifyRefineIntent(message: string): Promise<boolean> {
-  const fastModel = getFastModel();
-  try {
-    const result = await llmJsonCall<{ valid: boolean }>({
-      system: `You classify whether a user message is a valid request to modify AI agent config files (CLAUDE.md, .cursorrules, skills).
-Valid: requests to add, remove, change, or restructure config content. Examples: "add testing commands", "remove the terraform section", "make CLAUDE.md shorter".
-Invalid: questions, requests to show/display something, general chat, or anything that isn't a concrete config change.
-Return {"valid": true} or {"valid": false}. Nothing else.`,
-      prompt: message,
-      maxTokens: 20,
-      ...(fastModel ? { model: fastModel } : {}),
-    });
-    return result.valid === true;
-  } catch {
-    return true;
-  }
-}
-
-async function evaluateDismissals(
-  failingChecks: readonly Check[],
-  fingerprint: { languages: string[]; frameworks: string[]; fileTree: string[]; tools: string[] },
-): Promise<DismissedCheck[]> {
-  if (failingChecks.length === 0) return [];
-  const fastModel = getFastModel();
-  const checkList = failingChecks.map(c => ({
-    id: c.id,
-    name: c.name,
-    suggestion: c.suggestion,
-  }));
-
-  const hasBuildFiles = fingerprint.fileTree.some(f =>
-    /^(package\.json|Makefile|Cargo\.toml|go\.mod|pyproject\.toml|requirements\.txt|build\.gradle|pom\.xml)$/i.test(f.split('/').pop() || '')
-  );
-  const topFiles = fingerprint.fileTree.slice(0, 30).join(', ');
-
-  try {
-    const result = await llmJsonCall<{ dismissed: Array<{ id: string; reason: string }> }>({
-      system: `You evaluate whether scoring checks are applicable to a project.
-Given the project context and a list of failing checks, return which checks are NOT applicable.
-
-Only dismiss checks that truly don't apply. Examples:
-- "Build/test/lint commands" for a GitOps/Helm/Terraform/config repo with no build system
-- "Build/test/lint commands" for a repo with only YAML, HCL, or config files and no package.json/Makefile
-- "Dependency coverage" for a repo with no package manager
-
-Do NOT dismiss checks that could reasonably apply even if the project doesn't use them yet.
-
-Return {"dismissed": [{"id": "check_id", "reason": "brief reason"}]} or {"dismissed": []} if all apply.`,
-      prompt: `Languages: ${fingerprint.languages.join(', ') || 'none'}
-Frameworks: ${fingerprint.frameworks.join(', ') || 'none'}
-Tools: ${fingerprint.tools.join(', ') || 'none'}
-Has build files (package.json, Makefile, etc.): ${hasBuildFiles ? 'yes' : 'no'}
-Top files: ${topFiles}
-
-Failing checks:
-${JSON.stringify(checkList, null, 2)}`,
-      maxTokens: 300,
-      ...(fastModel ? { model: fastModel } : {}),
-    });
-
-    if (!Array.isArray(result.dismissed)) return [];
-    return result.dismissed
-      .filter(d => d.id && d.reason && failingChecks.some(c => c.id === d.id))
-      .map(d => ({ id: d.id, reason: d.reason, dismissedAt: new Date().toISOString() }));
-  } catch {
-    return [];
-  }
-}
-
-async function promptAgent(): Promise<TargetAgent> {
-  const selected = await checkbox({
-    message: 'Which coding agents do you use? (toggle with space)',
-    choices: [
-      { name: 'Claude Code', value: 'claude' as const },
-      { name: 'Cursor', value: 'cursor' as const },
-      { name: 'Codex (OpenAI)', value: 'codex' as const },
-    ],
-    validate: (items) => {
-      if (items.length === 0) return 'At least one agent must be selected';
-      return true;
-    },
-  });
-  return selected;
-}
-
-type HookChoice = 'claude' | 'precommit' | 'both' | 'skip';
-
-async function promptHookType(targetAgent: TargetAgent): Promise<HookChoice> {
-  const choices: Array<{ name: string; value: HookChoice }> = [];
-  const hasClaude = targetAgent.includes('claude');
-
-  choices.push({ name: 'Git pre-commit hook — refresh before each commit (recommended)', value: 'precommit' });
-  if (hasClaude) {
-    choices.push({ name: 'Claude Code hook — auto-refresh on session end', value: 'claude' });
-    choices.push({ name: 'Both (pre-commit + Claude Code)', value: 'both' });
-  }
-  choices.push({ name: 'Skip for now', value: 'skip' });
-
-  return select({
-    message: 'Keep your AI docs & skills in sync as your code evolves?',
-    choices,
-  });
-}
-
-async function promptLearnInstall(targetAgent: TargetAgent): Promise<boolean> {
-  const hasClaude = targetAgent.includes('claude');
-  const hasCursor = targetAgent.includes('cursor');
-  const agentName = hasClaude && hasCursor ? 'Claude and Cursor'
-    : hasClaude ? 'Claude' : 'Cursor';
-
-  console.log(chalk.bold(`\n  Session Learning\n`));
-  console.log(chalk.dim(`  Caliber can learn from your ${agentName} sessions — when a tool fails`));
-  console.log(chalk.dim(`  or you correct a mistake, it captures the lesson so it won't`));
-  console.log(chalk.dim(`  happen again. Runs once at session end using the fast model.\n`));
-
-  return select({
-    message: 'Enable session learning?',
-    default: true,
-    choices: [
-      { name: 'Enable session learning (recommended)', value: true },
-      { name: 'Skip for now', value: false },
-    ],
-  });
-}
-
-async function promptReviewAction(hasSkillResults = false): Promise<'accept' | 'refine' | 'decline'> {
-  const acceptLabel = hasSkillResults
-    ? 'Accept and continue to community skills'
-    : 'Accept and apply';
-
-  return select({
-    message: 'What would you like to do?',
-    choices: [
-      { name: acceptLabel, value: 'accept' as const },
-      { name: 'Refine via chat', value: 'refine' as const },
-      { name: 'Decline all changes', value: 'decline' as const },
-    ],
-  });
-}
-
-function printSetupSummary(setup: Record<string, unknown>) {
-  const claude = setup.claude as Record<string, unknown> | undefined;
-  const cursor = setup.cursor as Record<string, unknown> | undefined;
-  const fileDescriptions = setup.fileDescriptions as Record<string, string> | undefined;
-  const deletions = setup.deletions as Array<{ filePath: string; reason: string }> | undefined;
-
-  console.log('');
-  console.log(chalk.bold('  Your tailored setup:\n'));
-
-  const getDescription = (filePath: string): string | undefined => {
-    return fileDescriptions?.[filePath];
-  };
-
-  if (claude) {
-    if (claude.claudeMd) {
-      const icon = fs.existsSync('CLAUDE.md') ? chalk.yellow('~') : chalk.green('+');
-      const desc = getDescription('CLAUDE.md');
-      console.log(`  ${icon} ${chalk.bold('CLAUDE.md')}`);
-      if (desc) console.log(chalk.dim(`    ${desc}`));
-      console.log('');
-    }
-
-    const skills = claude.skills as Array<{ name: string; description: string; content: string }> | undefined;
-    if (Array.isArray(skills) && skills.length > 0) {
-      for (const skill of skills) {
-        const skillPath = `.claude/skills/${skill.name}/SKILL.md`;
-        const icon = fs.existsSync(skillPath) ? chalk.yellow('~') : chalk.green('+');
-        const desc = getDescription(skillPath);
-        console.log(`  ${icon} ${chalk.bold(skillPath)}`);
-        console.log(chalk.dim(`    ${desc || skill.description || skill.name}`));
-        console.log('');
-      }
-    }
-  }
-
-  const codex = setup.codex as Record<string, unknown> | undefined;
-
-  if (codex) {
-    if (codex.agentsMd) {
-      const icon = fs.existsSync('AGENTS.md') ? chalk.yellow('~') : chalk.green('+');
-      const desc = getDescription('AGENTS.md');
-      console.log(`  ${icon} ${chalk.bold('AGENTS.md')}`);
-      if (desc) console.log(chalk.dim(`    ${desc}`));
-      console.log('');
-    }
-
-    const codexSkills = codex.skills as Array<{ name: string; description: string; content: string }> | undefined;
-    if (Array.isArray(codexSkills) && codexSkills.length > 0) {
-      for (const skill of codexSkills) {
-        const skillPath = `.agents/skills/${skill.name}/SKILL.md`;
-        const icon = fs.existsSync(skillPath) ? chalk.yellow('~') : chalk.green('+');
-        const desc = getDescription(skillPath);
-        console.log(`  ${icon} ${chalk.bold(skillPath)}`);
-        console.log(chalk.dim(`    ${desc || skill.description || skill.name}`));
-        console.log('');
-      }
-    }
-  }
-
-  if (cursor) {
-    if (cursor.cursorrules) {
-      const icon = fs.existsSync('.cursorrules') ? chalk.yellow('~') : chalk.green('+');
-      const desc = getDescription('.cursorrules');
-      console.log(`  ${icon} ${chalk.bold('.cursorrules')}`);
-      if (desc) console.log(chalk.dim(`    ${desc}`));
-      console.log('');
-    }
-
-    const cursorSkills = cursor.skills as Array<{ name: string; description: string; content: string }> | undefined;
-    if (Array.isArray(cursorSkills) && cursorSkills.length > 0) {
-      for (const skill of cursorSkills) {
-        const skillPath = `.cursor/skills/${skill.name}/SKILL.md`;
-        const icon = fs.existsSync(skillPath) ? chalk.yellow('~') : chalk.green('+');
-        const desc = getDescription(skillPath);
-        console.log(`  ${icon} ${chalk.bold(skillPath)}`);
-        console.log(chalk.dim(`    ${desc || skill.description || skill.name}`));
-        console.log('');
-      }
-    }
-
-    const rules = cursor.rules as Array<{ filename: string; content: string }> | undefined;
-    if (Array.isArray(rules) && rules.length > 0) {
-      for (const rule of rules) {
-        const rulePath = `.cursor/rules/${rule.filename}`;
-        const icon = fs.existsSync(rulePath) ? chalk.yellow('~') : chalk.green('+');
-        const desc = getDescription(rulePath);
-        console.log(`  ${icon} ${chalk.bold(rulePath)}`);
-        if (desc) {
-          console.log(chalk.dim(`    ${desc}`));
-        } else {
-          const firstLine = rule.content.split('\n').filter(l => l.trim() && !l.trim().startsWith('#'))[0];
-          if (firstLine) console.log(chalk.dim(`    ${firstLine.trim().slice(0, 80)}`));
-        }
-        console.log('');
-      }
-    }
-  }
-
-  if (Array.isArray(deletions) && deletions.length > 0) {
-    for (const del of deletions) {
-      console.log(`  ${chalk.red('-')} ${chalk.bold(del.filePath)}`);
-      console.log(chalk.dim(`    ${del.reason}`));
-      console.log('');
-    }
-  }
-
-  console.log(`  ${chalk.green('+')} ${chalk.dim('new')}  ${chalk.yellow('~')} ${chalk.dim('modified')}  ${chalk.red('-')} ${chalk.dim('removed')}`);
-  console.log('');
-}
-
-function derivePermissions(fingerprint: { languages: string[]; tools: string[]; fileTree: string[] }): string[] {
-  const perms: string[] = ['Bash(git *)'];
-  const langs = new Set(fingerprint.languages.map(l => l.toLowerCase()));
-  const tools = new Set(fingerprint.tools.map(t => t.toLowerCase()));
-  const hasFile = (name: string) => fingerprint.fileTree.some(f => f === name || f === `./${name}`);
-
-  if (langs.has('typescript') || langs.has('javascript') || hasFile('package.json')) {
-    perms.push('Bash(npm run *)', 'Bash(npx *)');
-  }
-  if (langs.has('python') || hasFile('pyproject.toml') || hasFile('requirements.txt')) {
-    perms.push('Bash(python *)', 'Bash(pip *)', 'Bash(pytest *)');
-  }
-  if (langs.has('go') || hasFile('go.mod')) {
-    perms.push('Bash(go *)');
-  }
-  if (langs.has('rust') || hasFile('Cargo.toml')) {
-    perms.push('Bash(cargo *)');
-  }
-  if (langs.has('java') || langs.has('kotlin')) {
-    if (hasFile('gradlew')) perms.push('Bash(./gradlew *)');
-    if (hasFile('mvnw')) perms.push('Bash(./mvnw *)');
-    if (hasFile('pom.xml')) perms.push('Bash(mvn *)');
-    if (hasFile('build.gradle') || hasFile('build.gradle.kts')) perms.push('Bash(gradle *)');
-  }
-  if (langs.has('ruby') || hasFile('Gemfile')) {
-    perms.push('Bash(bundle *)', 'Bash(rake *)');
-  }
-  if (tools.has('terraform') || hasFile('main.tf')) {
-    perms.push('Bash(terraform *)');
-  }
-  if (tools.has('docker') || hasFile('Dockerfile') || hasFile('docker-compose.yml')) {
-    perms.push('Bash(docker *)');
-  }
-  if (hasFile('Makefile')) {
-    perms.push('Bash(make *)');
-  }
-
-  return [...new Set(perms)];
-}
-
-function ensurePermissions(fingerprint: { languages: string[]; tools: string[]; fileTree: string[] }): void {
-  const settingsPath = '.claude/settings.json';
-  let settings: Record<string, unknown> = {};
-
-  try {
-    if (fs.existsSync(settingsPath)) {
-      settings = JSON.parse(fs.readFileSync(settingsPath, 'utf-8'));
-    }
-  } catch { /* not valid JSON, start fresh */ }
-
-  const permissions = (settings.permissions ?? {}) as Record<string, unknown>;
-  const allow = permissions.allow as unknown[] | undefined;
-
-  if (Array.isArray(allow) && allow.length > 0) return;
-
-  permissions.allow = derivePermissions(fingerprint);
-  settings.permissions = permissions;
-
-  if (!fs.existsSync('.claude')) fs.mkdirSync('.claude', { recursive: true });
-  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + '\n');
-}
-
-function displayTokenUsage(): void {
-  const summary = getUsageSummary();
-  if (summary.length === 0) {
-    console.log(chalk.dim('  Token tracking not available for this provider.\n'));
-    return;
-  }
-
-  console.log(chalk.bold('  Token usage:\n'));
-  let totalIn = 0;
-  let totalOut = 0;
-  for (const m of summary) {
-    totalIn += m.inputTokens;
-    totalOut += m.outputTokens;
-    const cacheInfo = m.cacheReadTokens > 0 || m.cacheWriteTokens > 0
-      ? chalk.dim(` (cache: ${m.cacheReadTokens.toLocaleString()} read, ${m.cacheWriteTokens.toLocaleString()} write)`)
-      : '';
-    console.log(`    ${chalk.dim(m.model)}: ${m.inputTokens.toLocaleString()} in / ${m.outputTokens.toLocaleString()} out  (${m.calls} call${m.calls === 1 ? '' : 's'})${cacheInfo}`);
-  }
-  if (summary.length > 1) {
-    console.log(`    ${chalk.dim('Total')}: ${totalIn.toLocaleString()} in / ${totalOut.toLocaleString()} out`);
-  }
-  console.log('');
-}
-
-function writeErrorLog(
-  config: { provider: string; model: string },
-  rawOutput: string | undefined,
-  error?: string,
-  stopReason?: string,
-): void {
-  try {
-    const logPath = path.join(process.cwd(), '.caliber', 'error-log.md');
-    const lines = [
-      `# Generation Error — ${new Date().toISOString()}`,
-      '',
-      `**Provider**: ${config.provider}`,
-      `**Model**: ${config.model}`,
-      `**Stop reason**: ${stopReason || 'unknown'}`,
-      '',
-    ];
-    if (error) {
-      lines.push('## Error', '```', error, '```', '');
-    }
-    lines.push('## Raw LLM Output', '```', rawOutput || '(empty)', '```');
-
-    fs.mkdirSync(path.join(process.cwd(), '.caliber'), { recursive: true });
-    fs.writeFileSync(logPath, lines.join('\n'));
-    console.log(chalk.dim(`\n  Error log written to .caliber/error-log.md`));
-  } catch {
-    // best effort
   }
 }

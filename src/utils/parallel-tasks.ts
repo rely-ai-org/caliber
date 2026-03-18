@@ -38,6 +38,8 @@ export class ParallelTaskDisplay {
   private cachedCardCols = -1;
   private cachedConnectors: string[] | null = null;
 
+  private previewLines: string[] = [];
+
   add(name: string, options?: { depth?: number; pipelineLabel?: string; pipelineRow?: 0 | 1 }): number {
     const index = this.tasks.length;
     this.tasks.push({
@@ -112,6 +114,10 @@ export class ParallelTaskDisplay {
     };
 
     stdin.on('data', this.keypressHandler);
+  }
+
+  setPreviewContent(lines: string[]): void {
+    this.previewLines = lines;
   }
 
   stop(): void {
@@ -285,7 +291,15 @@ export class ParallelTaskDisplay {
     }
     lines.push(...taskLines);
 
-    if (this.waitingEnabled && this.waitingCards.length > 0 && stdout.isTTY) {
+    if (this.previewLines.length > 0 && stdout.isTTY) {
+      const cols = stdout.columns || 80;
+      const maxHeight = Math.min(Math.floor((stdout.rows || 24) / 3), 10);
+      const visibleLines = this.previewLines.slice(-maxHeight);
+      lines.push(PREFIX + chalk.dim('─'.repeat(Math.min(cols - PREFIX.length * 2, 55))));
+      for (const line of visibleLines) {
+        lines.push(PREFIX + line.slice(0, cols - PREFIX.length));
+      }
+    } else if (this.waitingEnabled && this.waitingCards.length > 0 && stdout.isTTY) {
       const cols = stdout.columns || 80;
       if (this.currentCard !== this.cachedCardIndex || cols !== this.cachedCardCols || !this.cachedCardLines) {
         const card = this.waitingCards[this.currentCard];

@@ -14,6 +14,13 @@
 **Effort:** S (human: ~2 hrs / CC: ~10 min)
 **Depends on:** Nothing.
 
+## P2: Auto-accept for high-confidence re-runs
+**What:** When re-running `caliber init` with score >=90 and `.caliber/` already exists, auto-apply changes and show undo instructions instead of prompting for review.
+**Why:** Power users running init repeatedly shouldn't face the same review prompt every time. Near-zero friction for confident re-runs.
+**Context:** The `--auto-approve` flag exists but is a blunt instrument. This would be a smart default based on confidence score + re-run detection. Requires first-run vs re-run awareness (`.caliber/` dir detection) to ship first.
+**Effort:** S (human: ~2 hrs / CC: ~10 min)
+**Depends on:** First-run vs re-run awareness feature.
+
 ## P3: Windows CI test runner
 **What:** Add a Windows GitHub Actions runner to test seat-based providers on Windows.
 **Why:** Windows shell escaping in claude-cli.ts and cursor-acp.ts is untested.

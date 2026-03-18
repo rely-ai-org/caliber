@@ -11,6 +11,7 @@ interface GenerateCallbacks {
   onStatus: (message: string) => void;
   onComplete: (setup: Record<string, unknown>, explanation?: string) => void;
   onError: (error: string) => void;
+  onContent?: (text: string) => void;
 }
 
 interface SkillTopic {
@@ -99,8 +100,22 @@ export async function generateSetup(
     )
   );
 
-  // Merge skills into setup
-  for (const result of skillResults) {
+  const { failed: failedCount } = mergeSkillResults(skillResults, setup);
+  if (failedCount > 0 && callbacks) {
+    callbacks.onStatus(`${failedCount} skill${failedCount === 1 ? '' : 's'} failed to generate`);
+  }
+
+  return coreResult;
+}
+
+function mergeSkillResults(
+  results: PromiseSettledResult<{ platform: string; skill: GeneratedSkill }>[],
+  setup: Record<string, unknown>,
+): { succeeded: number; failed: number } {
+  let succeeded = 0;
+  let failed = 0;
+
+  for (const result of results) {
     if (result.status === 'fulfilled') {
       const { platform, skill } = result.value;
       const platformObj = (setup[platform] ?? {}) as Record<string, unknown>;
@@ -115,15 +130,13 @@ export async function generateSetup(
       const descriptions = (setup.fileDescriptions ?? {}) as Record<string, string>;
       descriptions[skillPath] = skill.description.slice(0, 80);
       setup.fileDescriptions = descriptions;
+      succeeded++;
+    } else {
+      failed++;
     }
   }
 
-  const failedCount = skillResults.filter(r => r.status === 'rejected').length;
-  if (failedCount > 0 && callbacks) {
-    callbacks.onStatus(`${failedCount} skill${failedCount === 1 ? '' : 's'} failed to generate`);
-  }
-
-  return coreResult;
+  return { succeeded, failed };
 }
 
 function collectSkillTopics(
@@ -275,6 +288,8 @@ async function streamGeneration(config: StreamGenerationConfig): Promise<Generat
                 if (trimmed.startsWith('STATUS:')) {
                   const status = trimmed.slice(7).trim();
                   if (status && config.callbacks) config.callbacks.onStatus(status);
+                } else if (trimmed && config.callbacks?.onContent) {
+                  config.callbacks.onContent(trimmed);
                 }
               }
               sentStatuses = completedLines.length;
@@ -406,26 +421,7 @@ export async function generateSkillsForSetup(
     )
   );
 
-  for (const result of skillResults) {
-    if (result.status === 'fulfilled') {
-      const { platform, skill } = result.value;
-      const platformObj = (setup[platform] ?? {}) as Record<string, unknown>;
-      const skills = (platformObj.skills ?? []) as GeneratedSkill[];
-      skills.push(skill);
-      platformObj.skills = skills;
-      setup[platform] = platformObj;
-
-      const skillPath = platform === 'codex'
-        ? `.agents/skills/${skill.name}/SKILL.md`
-        : `.${platform}/skills/${skill.name}/SKILL.md`;
-      const descriptions = (setup.fileDescriptions ?? {}) as Record<string, string>;
-      descriptions[skillPath] = skill.description.slice(0, 80);
-      setup.fileDescriptions = descriptions;
-    }
-  }
-
-  const succeeded = skillResults.filter(r => r.status === 'fulfilled').length;
-  const failed = skillResults.filter(r => r.status === 'rejected').length;
+  const { succeeded, failed } = mergeSkillResults(skillResults, setup);
   if (failed > 0) onStatus?.(`${succeeded} generated, ${failed} failed`);
 
   return succeeded;

@@ -2,16 +2,16 @@ import { trackEvent } from './index.js';
 
 // --- Init flow events ---
 
-export function trackInitProviderSelected(provider: string, model: string): void {
-  trackEvent('init_provider_selected', { provider, model });
+export function trackInitProviderSelected(provider: string, model: string, isFirstRun?: boolean): void {
+  trackEvent('init_provider_selected', { provider, model, is_first_run: isFirstRun });
 }
 
 export function trackInitProjectDiscovered(languageCount: number, dependencyCount: number, fileCount: number): void {
   trackEvent('init_project_discovered', { language_count: languageCount, dependency_count: dependencyCount, file_count: fileCount });
 }
 
-export function trackInitAgentSelected(agents: string[]): void {
-  trackEvent('init_agent_selected', { agents: agents.join(',') });
+export function trackInitAgentSelected(agents: string[], autoDetected?: boolean): void {
+  trackEvent('init_agent_selected', { agents: agents.join(','), auto_detected: autoDetected });
 }
 
 export function trackInitScoreComputed(score: number, passingCount: number, failingCount: number, earlyExit: boolean): void {
