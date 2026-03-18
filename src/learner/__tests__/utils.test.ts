@@ -1,3 +1,4 @@
+import { describe, it, expect } from 'vitest';
 import { normalizeBullet, hasTypePrefix, isSimilarLearning } from '../utils.js';
 
 describe('normalizeBullet', () => {

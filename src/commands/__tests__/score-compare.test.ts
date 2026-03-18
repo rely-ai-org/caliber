@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { execFileSync } from 'child_process';
 
 vi.mock('child_process', () => ({
@@ -56,7 +57,7 @@ describe('score --compare', () => {
 
     await scoreCommand({ quiet: true, compare: 'main' });
 
-    const output = logSpy.mock.calls.map(c => c[0]).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('87/100');
     expect(output).toContain('-5');
     expect(output).toContain('main');
@@ -71,7 +72,7 @@ describe('score --compare', () => {
 
     await scoreCommand({ quiet: true, compare: 'main' });
 
-    const output = logSpy.mock.calls.map(c => c[0]).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('+15');
   });
 
@@ -84,7 +85,7 @@ describe('score --compare', () => {
 
     await scoreCommand({ quiet: true, compare: 'main' });
 
-    const output = logSpy.mock.calls.map(c => c[0]).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(output).toContain('85/100');
     // No +/- prefix for zero delta
     expect(output).toContain('0');
@@ -100,7 +101,7 @@ describe('score --compare', () => {
     await scoreCommand({ compare: 'nonexistent-branch' });
 
     expect(errorSpy).toHaveBeenCalled();
-    const errorOutput = errorSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const errorOutput = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(errorOutput).toContain('nonexistent-branch');
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined as unknown as number;
@@ -134,7 +135,7 @@ describe('score --compare', () => {
     await scoreCommand({ quiet: true, compare: 'main' });
 
     // scoreBaseRef still runs computeLocalScore on empty temp dir → returns 0
-    const output = logSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(output).toContain('87/100');
     expect(output).toContain('+87');
   });

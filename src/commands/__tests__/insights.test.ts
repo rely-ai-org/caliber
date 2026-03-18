@@ -1,3 +1,5 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+
 vi.mock('../../learner/roi.js', async () => {
   const actual = await vi.importActual<typeof import('../../learner/roi.js')>('../../learner/roi.js');
   return {
@@ -109,7 +111,7 @@ describe('insights command', () => {
 
     await insightsCommand({});
 
-    const output = logSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(output).toContain('No learning hooks installed');
     expect(output).toContain('caliber learn install');
   });
@@ -120,7 +122,7 @@ describe('insights command', () => {
 
     await insightsCommand({});
 
-    const output = logSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(output).toContain('No session data yet');
   });
 
@@ -129,7 +131,7 @@ describe('insights command', () => {
 
     await insightsCommand({});
 
-    const output = logSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(output).toContain('early data');
     expect(output).toContain('Sessions tracked');
   });
@@ -139,7 +141,7 @@ describe('insights command', () => {
 
     await insightsCommand({});
 
-    const output = logSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(output).toContain('Agent Health');
     expect(output).toContain('Learning Impact');
     expect(output).toContain('Task success rate');
@@ -172,7 +174,7 @@ describe('insights command', () => {
 
     await insightsCommand({});
 
-    const output = logSpy.mock.calls.map(c => String(c[0])).join('\n');
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(output).toContain('60%'); // 3/5 = 60% success rate
     expect(output).toContain('Corrections needed');
   });

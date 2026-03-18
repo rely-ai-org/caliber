@@ -1,3 +1,4 @@
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { writeFinalizeSummary, checkPendingNotifications } from '../notifications.js';
@@ -74,7 +75,7 @@ describe('checkPendingNotifications', () => {
     checkPendingNotifications();
 
     expect(logSpy).toHaveBeenCalled();
-    const allOutput = logSpy.mock.calls.map(c => c[0]).join('\n');
+    const allOutput = logSpy.mock.calls.map((c: unknown[]) => c[0]).join('\n');
     expect(allOutput).toContain('learned 2 new patterns');
     expect(fs.existsSync(NOTIFICATION_FILE)).toBe(false);
   });
