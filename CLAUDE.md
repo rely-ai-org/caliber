@@ -22,7 +22,7 @@ npx vitest run src/scoring/__tests__/accuracy.test.ts  # single file
 
 **LLM** (`src/llm/`): `types.ts` (interface, `isSeatBased()`) · `config.ts` (`DEFAULT_MODELS`, `DEFAULT_FAST_MODELS`, `MODEL_CONTEXT_WINDOWS`, `getMaxPromptTokens`, `~/.caliber/config.json`) · `anthropic.ts` · `vertex.ts` · `openai-compat.ts` · `claude-cli.ts` (`claude -p`) · `cursor-acp.ts` (headless `agent --print`) · `seat-based-errors.ts` (shared error parsing) · `utils.ts` (`extractJson`, `estimateTokens`) · `index.ts` (`llmCall`, `llmJsonCall`, retry/backoff via `TRANSIENT_ERRORS`)
 
-**AI** (`src/ai/`): `generate.ts` (streaming init) · `refine.ts` (chat refinement) · `refresh.ts` (diff-based updates) · `learn.ts` (session analysis) · `detect.ts` (LLM framework detection) · `prompts.ts` (all system prompts)
+**AI** (`src/ai/`): `generate.ts` (streaming init) · `refine.ts` (chat refinement) · `refresh.ts` (diff-based updates) · `learn.ts` (session analysis) · `detect.ts` (LLM framework detection) · `prompts.ts` (all system prompts) · `score-refine.ts` (auto-fix scoring issues)
 
 **Commands** (`src/commands/`): `init.ts` · `regenerate.ts` (alias `regen`/`re`) · `status.ts` · `undo.ts` · `config.ts` · `score.ts` · `refresh.ts` · `hooks.ts` · `learn.ts` · `recommend.ts`
 
@@ -65,16 +65,11 @@ Fast model for lightweight tasks; full model for generation/refinement. `getFast
 - **Coverage**: v8; excludes `src/test/`, `src/bin.ts`, `src/cli.ts`, `src/commands/**`, `dist/**`
 - **Single file**: `npx vitest run src/scoring/__tests__/accuracy.test.ts`
 
-## Build & Lint
+## Build & Deploy
 
 ```bash
 npm run build          # compile TypeScript via tsup → dist/
 npx tsc --noEmit       # type-check without emitting files
-```
-
-## Deploy
-
-```bash
 npm publish --access public   # publish @rely-ai/caliber to npm
 npm version patch             # bump patch version before publish
 ```
@@ -88,6 +83,7 @@ npm version patch             # bump patch version before publish
 - Use `ora` spinners with `.fail()` before rethrowing async errors
 - Transient LLM errors auto-retry in `llmCall()` via `TRANSIENT_ERRORS` array
 - JSON from LLM: always use `extractJson()` from `src/llm/utils.ts`, never raw `JSON.parse()`
+- Telemetry via `posthog-node` — wrap commands with `tracked()` in `src/cli.ts`
 - Key deps: `commander`, `chalk`, `ora`, `diff`, `glob`, `tsup`, `@inquirer/confirm`, `@inquirer/select`, `@inquirer/checkbox`, `posthog-node`
 - API keys stored in `~/.caliber/config.json` with `0600` permissions — never in project files
 

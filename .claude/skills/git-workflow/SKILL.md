@@ -1,99 +1,151 @@
 ---
 name: git-workflow
-description: Git commit and PR workflow for @rely-ai/caliber. Use when staging commits, writing conventional commit messages, pushing branches, or creating GitHub PRs. Trigger phrases: 'commit', 'PR', 'push', 'changelog'. Handles feature branches, conventional commits (feat/fix/docs/refactor/test/chore), and multi-step verification. Do NOT use for git hooks setup — see `caliber hooks` command instead.
+description: Git commit and PR workflow using Conventional Commits (feat/fix/docs/refactor/test/chore), feature branches, and pre-push verification with npm run test and npx tsc --noEmit. Use when user says 'commit', 'PR', 'push', 'changelog', or 'merge'. Do NOT use for git hooks setup (use caliber hooks command instead) or for CI/CD pipeline configuration.
 ---
 # Git Workflow
 
 ## Critical
 
-- **Conventional Commits Required**: All commits must follow `type(scope): description` format. Types: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`. Example: `feat(cli): add score command` or `fix(llm): retry backoff logic`.
-- **Branch Naming**: Use `feature/`, `fix/`, `docs/` prefix. Example: `feature/new-command` or `fix/type-checking`.
-- **Verification Before Push**: Run `npm run test` and `npx tsc --noEmit` to catch regressions.
-- **No Direct Commits to `main`**: Always use a feature branch and create a PR.
+- **Always run pre-push verification** before opening a PR or pushing to main:
+  ```bash
+  npm run test      # Vitest must pass
+  npx tsc --noEmit # TypeScript must have zero errors
+  ```
+  If either fails, fix the code and re-run. Do NOT push incomplete work.
+
+- **Use Conventional Commits** format: `<type>(<scope>): <subject>`
+  - `feat`: new feature (bumps minor version)
+  - `fix`: bug fix (bumps patch)
+  - `docs`: documentation only
+  - `refactor`: code restructure (no feature/fix)
+  - `test`: test additions/fixes
+  - `chore`: deps, build config, cleanup
+  - Example: `feat(llm): add Vertex AI provider support`
+
+- **Work on feature branches**, never commit directly to `main`. Format: `feat/feature-name` or `fix/issue-name`.
 
 ## Instructions
 
-1. **Create and Switch to Feature Branch**
+1. **Create and switch to a feature branch**
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b feat/your-feature-name
+   # or for fixes:
+   git checkout -b fix/your-fix-name
    ```
-   Verify: `git branch | grep feature/` shows your branch.
+   Verify: `git branch` shows your new branch as current.
 
-2. **Stage Changes**
+2. **Make commits with Conventional Commit messages**
    ```bash
-   git add src/your-changes.ts src/types.ts
+   git add src/path/to/file.ts
+   git commit -m "feat(scope): description of change"
    ```
-   Verify: `git status` shows staged files under "Changes to be committed".
+   Verify: `git log --oneline -3` shows your commits with correct format.
 
-3. **Run Tests and Type Check** (uses output from Step 2)
+3. **Run full test suite before pushing** (Step 1 output required)
    ```bash
-   npm run test
-   npx tsc --noEmit
+   npm run test      # Vitest run (all tests must pass)
+   npx tsc --noEmit # TypeScript strict mode (zero errors)
    ```
-   Verify: Both commands exit with status 0. If tests fail, fix code and re-run before committing.
+   If tests fail, fix the code and commit again. Do NOT skip this step.
+   Verify: Both commands exit with code 0.
 
-4. **Commit with Conventional Message**
+4. **Push your branch to remote**
    ```bash
-   git commit -m "feat(commands): add new fingerprint enrichment
-   
-   - Extract platform detection from code-analysis.ts
-   - Update LLM prompts.ts system message
-   - Add test in src/fingerprint/__tests__/"
+   git push -u origin feat/your-feature-name
    ```
-   Message format: `type(scope): description` on first line, blank line, then bullet-point details. Verify: `git log -1` shows properly formatted message.
+   Verify: GitHub branch appears in repo (check `git push` output for URL).
 
-5. **Push Branch**
-   ```bash
-   git push origin feature/your-feature-name
-   ```
-   Verify: GitHub shows "Compare & pull request" button or output confirms remote tracking branch created.
+5. **Open a Pull Request**
+   - Title: Use same Conventional Commit format: `feat(scope): description`
+   - Body: Describe *why* the change, link any issues (`Closes #123`)
+   - Example:
+     ```
+     feat(llm): add Vertex AI provider support
 
-6. **Create PR via GitHub CLI or Web UI**
+     - Adds `src/llm/vertex.ts` with ADC + service account auth
+     - Integrates into `src/llm/config.ts` DEFAULT_MODELS
+     - Tests in `src/llm/__tests__/vertex.test.ts`
+
+     Closes #456
+     ```
+   Verify: PR title passes pre-commit lint check (no typos, correct scope).
+
+6. **Address review feedback**
+   - Make requested changes in new commits (same branch)
+   - Commit message format: `fix(scope): address review feedback` or specific detail
+   - Do NOT amend/rebase unless maintainer requests
+   - Re-run tests after each change
+
+7. **Merge to main** (maintainer or after approval)
    ```bash
-   gh pr create --title "feat(commands): add new fingerprint enrichment" \
-     --body "Closes #123. Adds LLM-based platform detection to fingerprint stage."
+   git checkout main
+   git pull origin main
+   git merge --ff-only feat/your-feature-name
+   git push origin main
    ```
-   Or visit `https://github.com/rely-ai/caliber/pull/new/feature/your-feature-name`.
-   Verify: PR title matches first line of commit message, body references issue number (if applicable).
+   Verify: GitHub shows commit merged into main, branch auto-deleted.
 
 ## Examples
 
-**Scenario: Adding a new LLM provider**
+**User says:** "Add support for OpenAI-compatible endpoints"
 
-User says: "I need to add OpenAI support and commit it."
+**Actions:**
+1. `git checkout -b feat/openai-compat` (Step 1)
+2. Create `src/llm/openai-compat.ts` with provider logic
+3. Update `src/llm/config.ts` to register provider
+4. Add tests in `src/llm/__tests__/openai-compat.test.ts`
+5. `git add src/llm/` → `git commit -m "feat(llm): add OpenAI-compatible endpoint support"` (Step 2)
+6. `npm run test && npx tsc --noEmit` → both pass (Step 3)
+7. `git push -u origin feat/openai-compat` (Step 4)
+8. Open PR titled `feat(llm): add OpenAI-compatible endpoint support`, link issue (Step 5)
 
-→ **Actions**:
-1. `git checkout -b feature/openai-provider`
-2. Create `src/llm/openai.ts` following pattern in `src/llm/anthropic.ts`
-3. Update `src/llm/index.ts` to export new provider
-4. Add test in `src/llm/__tests__/openai.test.ts`
-5. `git add src/llm/openai.ts src/llm/index.ts src/llm/__tests__/openai.test.ts`
-6. `npm run test && npx tsc --noEmit` → both pass
-7. `git commit -m "feat(llm): add openai provider support\n\n- Implement OpenAI client matching LLMProvider interface\n- Support OPENAI_API_KEY and OPENAI_BASE_URL env vars\n- Add unit tests for token estimation and error handling"`
-8. `git push origin feature/openai-provider`
-9. `gh pr create --title "feat(llm): add openai provider support" --body "Adds OpenAI as LLM backend, resolves #456"`
+**Result:** PR passes CI, ready for review.
 
-→ **Result**: PR created with conventional commit, all tests passing, ready for review.
+---
+
+**User says:** "Fix the Cursor ACP retry logic"
+
+**Actions:**
+1. `git checkout -b fix/cursor-acp-retry` (Step 1)
+2. Edit `src/llm/cursor-acp.ts` to fix retry backoff
+3. Update test in `src/llm/__tests__/cursor-acp.test.ts`
+4. `git commit -m "fix(llm): correct Cursor ACP retry backoff calculation"` (Step 2)
+5. `npm run test -- --filter=cursor` + `npx tsc --noEmit` (Step 3)
+6. `git push -u origin fix/cursor-acp-retry` → Open PR → Merge after approval (Steps 4–7)
+
+**Result:** Bug fixed, tests pass, change merged to main.
 
 ## Common Issues
 
 **"fatal: not a git repository"**
-- Verify you're in project root: `ls -la | grep .git`
-- If missing, initialize: `git init` and add remote: `git remote add origin https://github.com/rely-ai/caliber.git`
+- You are not in the project root. Run `cd /path/to/caliber` first.
+- Verify: `git status` shows the repo, `ls` shows `.git` directory.
 
-**"Tests fail after commit"**
-- Revert commit: `git reset HEAD~1`
-- Fix code, re-run `npm run test`, then re-commit with corrected changes.
+**"npm run test" fails with "Cannot find module 'vitest'"**
+- Dependencies not installed. Run `npm install` (or `pnpm install` if using pnpm).
+- Verify: `node_modules/vitest/` exists, `npm run test -- --version` shows version.
 
-**"Branch rejected: CRLF vs LF line endings"**
-- Configure git: `git config core.autocrlf input`
-- Stage and recommit.
+**"npx tsc --noEmit" reports 15 errors**
+- TypeScript compilation failed. Fix each error (e.g., missing types, `null` checks, imports).
+- Run `npx tsc --noEmit` again after each fix. Do NOT commit if errors remain.
+- Verify: `npx tsc --noEmit` exits with code 0 (no output = success).
 
-**"fatal: 'origin' does not appear to be a 'git' repository" on push**
-- Verify remote: `git remote -v`
-- If missing, add: `git remote add origin https://github.com/rely-ai/caliber.git`
+**"git push" rejected: "Updates were rejected because the tip of your branch is behind"**
+- Remote has new commits. Sync your branch:
+  ```bash
+  git pull origin feat/your-feature-name --rebase
+  ```
+- Re-run tests: `npm run test && npx tsc --noEmit`
+- Push again: `git push origin feat/your-feature-name`
+- Verify: `git log --oneline` shows your commits on top.
 
-**"Commit message rejected (pre-commit hook failed)"**
-- Pre-commit hooks are configured in `.git/hooks/` via `caliber hooks` command.
-- Run `npm run test` and `npx tsc --noEmit` locally to match hook checks.
-- If only linting fails, run `npm run lint --fix` (if available) or fix manually.
+**"Commit message doesn't match Conventional Commit format"**
+- Reword the commit (only if not yet pushed):
+  ```bash
+  git commit --amend -m "feat(scope): correct message"
+  git push -f origin feat/your-feature-name
+  ```
+- Or create a new commit with correct format (if already pushed).
+- Verify: `git log --oneline -1` shows correct format.
+
+**PR title has typo (e.g., "feat(llmm): ..." instead of "feat(llm): ...")** — Edit the PR title directly on GitHub. Verify: Title matches your branch's first commit scope.

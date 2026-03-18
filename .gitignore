@@ -13,3 +13,6 @@ npm-debug.log*
 .caliber/
 .cursor/
 *.pdf
+
+# roro workspace
+.roro/

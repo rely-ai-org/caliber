@@ -1,133 +1,205 @@
 ---
 name: llm-provider
-description: Multi-provider LLM layer patterns for @rely-ai/caliber. Use when calling llmCall/llmJsonCall from src/llm/index.ts, adding a new LLM provider, handling streaming responses, parsing JSON from LLM output, or configuring provider credentials. Trigger phrases: 'add provider', 'LLM call', 'streaming', 'JSON parse', 'initialize LLM', 'retry logic'. Do NOT use for provider config UI (see src/commands/config.ts) or CLI argument parsing (see src/cli.ts).
+description: Multi-provider LLM layer with llmCall/llmJsonCall streaming and JSON parsing. Use when adding a provider, making LLM calls, handling streaming, or fixing retry logic. Supports Anthropic, Vertex, OpenAI-compatible, Claude CLI, Cursor ACP. Do NOT use for CLI config UI, scoring checks, or fingerprinting.
 ---
-# llm-provider
+# LLM Provider Layer
 
 ## Critical
 
-- **Provider Resolution Order**: Check env vars in order: `ANTHROPIC_API_KEY` → `VERTEX_PROJECT_ID`/`GCP_PROJECT_ID` → `OPENAI_API_KEY` → `CALIBER_USE_CURSOR_SEAT=1` → `CALIBER_USE_CLAUDE_CLI=1`. First match wins. If none found, throw error listing all missing keys.
-- **Config Location**: Always read/write to `~/.caliber/config.json` via `src/llm/config.ts`. Never hardcode credentials in `.env`.
-- **Import Pattern**: Use `import { llmCall, llmJsonCall } from './src/llm/index.ts'` — never import individual providers directly.
-- **Model Selection**: Use `DEFAULT_MODELS[provider]` or `DEFAULT_FAST_MODELS[provider]` from `src/llm/config.ts`. Fast models for streaming init; full models for refinement.
-- **JSON Extraction**: Always wrap LLM calls returning JSON with `extractJson()` from `src/llm/utils.ts`. Never `JSON.parse()` raw LLM output.
-- **Error Handling**: Catch `LLMError` (defined in `src/llm/types.ts`). Retry up to 3× with exponential backoff. Log provider name and model in error messages.
+1. **Provider resolution order is hardcoded** in `src/llm/index.ts`:
+   - `ANTHROPIC_API_KEY` → Anthropic (`claude-sonnet-4-6`)
+   - `VERTEX_PROJECT_ID`/`GCP_PROJECT_ID` → Vertex (`us-east5`)
+   - `OPENAI_API_KEY` → OpenAI (`gpt-4.1`; respects `OPENAI_BASE_URL`)
+   - `CALIBER_USE_CURSOR_SEAT=1` → Cursor ACP (no API key)
+   - Fallback: Claude CLI (`claude -p`, no API key)
+   - **DO NOT change this order without updating all provider tests**
+
+2. **Transient errors trigger automatic retry** via `TRANSIENT_ERRORS` constant in `src/llm/index.ts`. Check before implementing custom retry logic.
+
+3. **Seat-based providers** (Cursor, Claude CLI) use `isSeatBased()` from `src/llm/types.ts`. Never prompt for API key if `isSeatBased()` returns true.
+
+4. **JSON parsing uses `extractJson()`** from `src/llm/utils.ts`. Always pass raw LLM response through this; do not assume JSON in response body.
 
 ## Instructions
 
-1. **Verify Provider is Available**
-   - Check `src/llm/config.ts:DEFAULT_MODELS` has the provider mapped to a model string.
-   - If adding a new provider: add `export const PROVIDER_NAME_MODEL = 'model-id'` constant.
-   - Verify X before proceeding: Run `npm run build` and confirm no TypeScript errors in `src/llm/types.ts`.
+### Step 1: Use existing llmCall or llmJsonCall
+**Verify before proceeding:** Check `src/llm/index.ts` exports.
 
-2. **Create Provider File** (if new provider)
-   - Create `src/llm/{provider-name}.ts`.
-   - Export async function signature: `export async function {provider}Call(config: ProviderConfig, params: LLMParams): Promise<string>` (or `Promise<{ content: string; metadata: Metadata }>`; study existing providers for pattern).
-   - Import `LLMParams`, `ProviderConfig`, `LLMError` from `./types.ts`.
-   - Validate params match existing provider implementations (e.g., `anthropic.ts`, `openai-compat.ts`).
-   - This step uses output from Step 1 (model constants).
+For non-JSON responses:
+```typescript
+import { llmCall } from '@/llm';
+const response = await llmCall({
+  messages: [{ role: 'user', content: 'analyze this' }],
+  system: 'You are an expert',
+  model: getFastModel(), // or 'claude-sonnet-4-6'
+});
+```
 
-3. **Implement Provider Logic**
-   - Use SDK client initialization matching existing patterns:
-     - **Anthropic**: `new Anthropic({ apiKey: config.apiKey })`
-     - **OpenAI**: `new OpenAI({ apiKey: config.apiKey, baseURL: config.baseUrl })`
-     - **Vertex**: `new Anthropic({ apiVersion: 'v1', project: config.projectId, ... })`
-   - Build request body matching provider's API (study `anthropic.ts`, `openai-compat.ts` for exact field mappings).
-   - On error, throw `new LLMError(message, provider, model, originalError)`.
-   - Verify X: Provider client throws the correct error type for invalid API keys, rate limits, and network failures.
+For JSON responses:
+```typescript
+import { llmJsonCall } from '@/llm';
+const result = await llmJsonCall<MyType>({
+  messages: [...],
+  system: 'Return valid JSON',
+  schema: { type: 'object', properties: { ... } },
+});
+```
 
-4. **Handle Streaming (if applicable)**
-   - For streaming: return async generator yielding `{ type: 'text', text: string }` chunks (study `src/ai/generate.ts:createStreamGenerator()` for usage pattern).
-   - For non-streaming: accumulate chunks and return concatenated `string`.
-   - Call `ora().start()` before streaming; call `.stop()` after.
-   - This step uses error handling from Step 3.
+### Step 2: Implement streaming (if needed)
+**Verify before proceeding:** Confirm caller needs real-time token output.
 
-5. **Register Provider in src/llm/index.ts**
-   - Import new provider: `import { {provider}Call } from './{provider-name}'`.
-   - Add case in `llmCall()` switch: `case '{provider}': return {provider}Call(config, params);`
-   - Add to `llmJsonCall()` wrapper (calls `llmCall()` then `extractJson()`).
-   - Verify X: `npm run build` succeeds and `npm run test -- src/llm/__tests__/` passes (if tests exist).
+Use `provider.stream()` from resolved provider:
+```typescript
+const provider = await getProvider(); // auto-resolves from env
+const stream = await provider.stream({ messages, system });
+for await (const chunk of stream) {
+  process.stdout.write(chunk);
+}
+```
 
-6. **Update Config** (if credentials needed)
-   - Edit `src/llm/config.ts:DEFAULT_MODELS` and `DEFAULT_FAST_MODELS` to include new provider.
-   - Add env var fallback to provider resolution in `src/llm/index.ts:selectProvider()`.
-   - Update `~/.caliber/config.json` schema comment in `src/llm/config.ts`.
-   - This step uses output from Step 5 (provider registered).
+Pattern from `src/ai/generate.ts`: Initialize spinner, consume stream, update spinner with final text.
 
-7. **Test End-to-End**
-   - Create test in `src/llm/__tests__/{provider-name}.test.ts` calling `llmCall()` with mocked SDK.
-   - Test happy path (valid input → output), error path (invalid key → LLMError), and timeout.
-   - Run: `npm run test -- src/llm/__tests__/{provider-name}.test.ts`.
-   - Verify X: All tests pass and coverage > 80%.
+### Step 3: Handle JSON extraction from streaming
+**Verify before proceeding:** Response contains JSON but mixed with markdown.
+
+After consuming stream, pass to `extractJson()` from `src/llm/utils.ts`:
+```typescript
+import { extractJson } from '@/llm/utils';
+const parsed = extractJson<T>(rawResponse);
+// Returns { success: boolean, data?: T, raw: string }
+```
+
+Check `success` before using `data`. On failure, log `raw` for debugging.
+
+### Step 4: Resolve model via getFastModel()
+**Verify before proceeding:** Do not hardcode model names.
+
+For fast/cheap operations (e.g., scoring, detection):
+```typescript
+import { getFastModel } from '@/llm/config';
+const model = getFastModel(); // returns config-based fast model
+await llmCall({ messages, model });
+```
+
+For primary generation, use explicit model from `DEFAULT_MODELS` in `src/llm/config.ts`.
+
+### Step 5: Add new provider
+**Verify before proceeding:** Understand LLM interface in `src/llm/types.ts`.
+
+1. Create `src/llm/YOUR_PROVIDER.ts` implementing `LLMProvider` interface:
+   ```typescript
+   export interface LLMProvider {
+     call(opts: LLMCallOptions): Promise<string>;
+     stream(opts: LLMCallOptions): AsyncIterable<string>;
+   }
+   ```
+2. Register in `src/llm/index.ts` `getProvider()` function **before Cursor/CLI fallback**.
+3. Add tests in `src/llm/__tests__/YOUR_PROVIDER.test.ts` (use mocking; never hit real API in tests).
+4. Update `CLAUDE.md` with new env var and model default in this file.
+
+### Step 6: Fix retry/backoff issues
+**Verify before proceeding:** Error is in `TRANSIENT_ERRORS` constant.
+
+Transient errors auto-retry up to 3x with exponential backoff in `llmCall/llmJsonCall`. For permanent errors:
+1. Check `src/llm/seat-based-errors.ts` for seat-based error parsing.
+2. If new error type, add to constant and implement parser in provider file.
+3. Test with: `npm run test -- src/llm/__tests__/YOUR_PROVIDER.test.ts`.
 
 ## Examples
 
-**User says**: "Add Google Vertex AI provider for multi-region fallback."
+### Example 1: Make a simple LLM call for analysis
 
-**Actions**:
-1. Study `src/llm/vertex.ts` existing implementation.
-2. Confirm `DEFAULT_MODELS['vertex']` and `DEFAULT_FAST_MODELS['vertex']` exist in `src/llm/config.ts` → `'claude-3-5-sonnet@20241022'`.
-3. Add region fallback logic to `src/llm/vertex.ts:vertexCall()`:
+**User says:** "Generate analysis of this code snippet."
+
+**Actions:**
+1. Import: `import { llmCall } from '@/llm';`
+2. Call:
    ```typescript
-   const regions = config.region ? [config.region, 'us-east5'] : ['us-east5'];
-   for (const region of regions) {
-     try {
-       return await callVertex(region);
-     } catch (e) {
-       if (region === regions[regions.length - 1]) throw e;
-     }
+   const analysis = await llmCall({
+     messages: [{
+       role: 'user',
+       content: `Analyze this code: ${codeSnippet}`
+     }],
+     system: 'You are a code analyst.',
+     model: 'claude-sonnet-4-6',
+   });
+   ```
+3. Verify success: Check `analysis` is non-empty string.
+
+**Result:** Plain text analysis returned; no retry overhead visible to caller (auto-handled by `llmCall`).
+
+### Example 2: Stream skill generation with JSON extraction
+
+**User says:** "Generate a skill file and stream output."
+
+**Actions:**
+1. Get provider:
+   ```typescript
+   const provider = await getProvider();
+   ```
+2. Stream to user:
+   ```typescript
+   const stream = await provider.stream({
+     messages: [{ role: 'user', content: skillPrompt }],
+     system: 'Generate a Markdown skill file.',
+   });
+   let fullText = '';
+   for await (const chunk of stream) {
+     process.stdout.write(chunk);
+     fullText += chunk;
    }
    ```
-4. Update test: `src/llm/__tests__/vertex.test.ts` mocks both regions.
-5. Build and test: `npm run build && npm run test -- src/llm/__tests__/vertex.test.ts`.
-
-**Result**: Callers of `llmCall(config, params)` automatically failover to `us-east5` if primary region unavailable.
-
----
-
-**User says**: "Call LLM to generate CLAUDE.md and parse the JSON frontmatter."
-
-**Actions**:
-1. Use `llmJsonCall()` from `src/llm/index.ts`: it wraps `llmCall()` + `extractJson()`.
+3. Extract JSON from markdown:
    ```typescript
-   const result = await llmJsonCall(config, {
-     model: DEFAULT_MODELS[config.provider],
-     messages: [{ role: 'user', content: prompt }]
-   });
-   const parsed = JSON.parse(result);
+   const { success, data } = extractJson<SkillType>(fullText);
+   if (!success) throw new Error(`Failed to parse skill: ${fullText}`);
    ```
-2. If JSON is nested in markdown, `extractJson()` automatically extracts code blocks (study `src/llm/utils.ts`).
-3. Wrap in try/catch, throw `LLMError` on parse failure.
+4. Verify extraction succeeded before proceeding.
 
-**Result**: Reliable JSON extraction even if LLM adds markdown wrappers.
+**Result:** User sees real-time tokens; parsed skill object ready for writing.
 
 ## Common Issues
 
-**"Error: No LLM provider configured"**
-- Check all env vars: `echo $ANTHROPIC_API_KEY && echo $OPENAI_API_KEY && echo $VERTEX_PROJECT_ID`.
-- If empty, run: `caliber config` to interactively set provider and credentials.
-- Verify `~/.caliber/config.json` exists: `cat ~/.caliber/config.json`.
-- Fix: Set one env var or run config command; restart shell (`source ~/.bashrc`).
+### "No provider found"
+**Cause:** No `ANTHROPIC_API_KEY`, `VERTEX_PROJECT_ID`, `OPENAI_API_KEY`, `CALIBER_USE_CURSOR_SEAT`, or Claude CLI installed.
 
-**"LLMError: Invalid API key for provider=anthropic"**
-- Verify key exists: `echo $ANTHROPIC_API_KEY` (should not be empty).
-- Test directly: `curl https://api.anthropic.com/v1/messages -H "x-api-key: $ANTHROPIC_API_KEY"` → should 200 or auth error.
-- If auth error: regenerate key in Claude console, update env var, restart.
-- Fix: `export ANTHROPIC_API_KEY=sk-ant-...` then retry command.
+**Fix:**
+1. Check env vars: `echo $ANTHROPIC_API_KEY` (or `VERTEX_PROJECT_ID`, etc.)
+2. If none set, install Claude CLI: `npm install -g @anthropic-ai/claude-cli`
+3. Verify CLI works: `claude -v`
+4. If still failing, error message will specify which provider failed last.
 
-**"extractJson failed: No JSON found in response"**
-- LLM returned plain text instead of JSON.
-- Add `"format": "json"` to `messages[0].content` prompt or system prompt.
-- Study `src/ai/prompts.ts` for examples (e.g., `GENERATE_SYSTEM_PROMPT` uses `\`\`\`json ... \`\`\` `).
-- Fix: Update prompt to explicitly request JSON block; test with `caliber score --verbose`.
+### "JSON parse failed"
+**Cause:** `extractJson()` returned `{ success: false }`; LLM did not return valid JSON.
 
-**"Vertex auth: default credentials not found"**
-- Running outside GCP without explicit credentials.
-- Fix: Set `VERTEX_SA_CREDENTIALS` or `GOOGLE_APPLICATION_CREDENTIALS` to path of service account JSON.
-- Or: `gcloud auth application-default login` to use ADC.
+**Fix:**
+1. Log `raw` from extraction result: `console.log(result.raw)`
+2. Check if response is wrapped in markdown code block: `extractJson()` handles ` ```json ``` ` automatically.
+3. If prompt issue, add `Return ONLY valid JSON, no markdown or explanation` to system prompt.
+4. Retry with `getFastModel()` (cheaper) or explicit slower model if critical.
 
-**"Timeout after 30s (provider=openai)"**
-- Network latency or LLM hung.
-- Retry logic is built in (3× exponential backoff in `src/llm/index.ts:llmCall()`).
-- If still failing: check `OPENAI_BASE_URL` is reachable: `curl $OPENAI_BASE_URL/v1/models`.
-- Fix: Increase timeout in `src/llm/types.ts:LLMParams` → `timeout?: number` (ms); default 30000.
+### "Transient error: rate_limit_exceeded (429)"
+**Cause:** Provider API throttled; auto-retry should handle this.
+
+**Fix:**
+1. Verify error is in `TRANSIENT_ERRORS` in `src/llm/index.ts`: `'rate_limit_exceeded'` should be present.
+2. Check retry count in error message: if "Attempt 3/3 failed", all retries exhausted.
+3. Wait 30 seconds and retry manually; do not call LLM in a tight loop.
+4. For production, increase backoff multiplier in `llmCall()` logic.
+
+### "Cursor: agent --print failed"
+**Cause:** Cursor ACP provider (`src/llm/cursor-acp.ts`) spawned process failed.
+
+**Fix:**
+1. Verify Cursor is installed: `which cursor` or `cursor --version`
+2. Check if `CALIBER_USE_CURSOR_SEAT=1` is set: `echo $CALIBER_USE_CURSOR_SEAT`
+3. Run manually: `cursor agent --print 'test'` to see raw error.
+4. If "Cursor not found", remove `CALIBER_USE_CURSOR_SEAT` and fallback to next provider.
+
+### "Model not found: xyz"
+**Cause:** Hardcoded model name does not exist in provider's catalog.
+
+**Fix:**
+1. Check `src/llm/config.ts` `DEFAULT_MODELS` for correct name (e.g., `claude-sonnet-4-6`, not `claude-sonnet`).
+2. For OpenAI-compatible endpoints, verify `OPENAI_BASE_URL` is set and model exists there: `curl -H "Authorization: Bearer $OPENAI_API_KEY" $OPENAI_BASE_URL/models | grep xyz`
+3. Use `getFastModel()` instead of hardcoding if possible.
