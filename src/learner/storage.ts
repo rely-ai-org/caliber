@@ -34,12 +34,14 @@ export interface LearningState {
   sessionId: string | null;
   eventCount: number;
   lastAnalysisTimestamp: string | null;
+  lastAnalysisEventCount: number;
 }
 
 const DEFAULT_STATE: LearningState = {
   sessionId: null,
   eventCount: 0,
   lastAnalysisTimestamp: null,
+  lastAnalysisEventCount: 0,
 };
 
 export function ensureLearningDir(): void {

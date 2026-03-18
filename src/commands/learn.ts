@@ -16,6 +16,7 @@ import {
 import type { ToolEvent, PromptEvent } from '../learner/storage.js';
 import { writeLearnedContent, readLearnedSection, migrateInlineLearnings } from '../learner/writer.js';
 import { sanitizeSecrets } from '../lib/sanitize.js';
+import { writeFinalizeSummary } from '../lib/notifications.js';
 import {
   areLearningHooksInstalled,
   installLearningHooks,
@@ -38,6 +39,9 @@ import {
 
 /** Minimum tool events required before running LLM analysis. */
 const MIN_EVENTS_FOR_ANALYSIS = 25;
+const MIN_EVENTS_AUTO = 10;
+const AUTO_SETTLE_MS = 200;
+const INCREMENTAL_INTERVAL = 50;
 
 export async function learnObserveCommand(options: { failure?: boolean; prompt?: boolean }) {
   try {
@@ -81,23 +85,47 @@ export async function learnObserveCommand(options: { failure?: boolean; prompt?:
     state.eventCount++;
     if (!state.sessionId) state.sessionId = sessionId;
     writeState(state);
+
+    // Trigger incremental learning mid-session every INCREMENTAL_INTERVAL events
+    const eventsSinceLastAnalysis = state.eventCount - (state.lastAnalysisEventCount || 0);
+    if (eventsSinceLastAnalysis >= INCREMENTAL_INTERVAL) {
+      try {
+        const { resolveCaliber } = await import('../lib/resolve-caliber.js');
+        const bin = resolveCaliber();
+        const { spawn } = await import('child_process');
+        spawn(bin, ['learn', 'finalize', '--auto', '--incremental'], {
+          detached: true,
+          stdio: 'ignore',
+        }).unref();
+      } catch {
+        // Best effort — don't block the hook
+      }
+    }
   } catch {
     // Hook observers must never crash or produce output
   }
 }
 
-export async function learnFinalizeCommand(options?: { force?: boolean }) {
-  if (!options?.force) {
+export async function learnFinalizeCommand(options?: { force?: boolean; auto?: boolean; incremental?: boolean }) {
+  const isAuto = options?.auto === true;
+  const isIncremental = options?.incremental === true;
+
+  if (!options?.force && !isAuto) {
     const { isCaliberRunning } = await import('../lib/lock.js');
     if (isCaliberRunning()) {
-      console.log(chalk.dim('caliber: skipping finalize — another caliber process is running'));
+      if (!isAuto) console.log(chalk.dim('caliber: skipping finalize — another caliber process is running'));
       return;
     }
   }
 
+  // Wait for event hooks to finish writing (race condition guard)
+  if (isAuto) {
+    await new Promise(r => setTimeout(r, AUTO_SETTLE_MS));
+  }
+
   // Prevent concurrent finalize from parallel sessions
   if (!acquireFinalizeLock()) {
-    console.log(chalk.dim('caliber: skipping finalize — another finalize is in progress'));
+    if (!isAuto) console.log(chalk.dim('caliber: skipping finalize — another finalize is in progress'));
     return;
   }
 
@@ -105,6 +133,7 @@ export async function learnFinalizeCommand(options?: { force?: boolean }) {
   try {
     const config = loadConfig();
     if (!config) {
+      if (isAuto) return; // Graceful degradation: preserve events for later
       console.log(chalk.yellow('caliber: no LLM provider configured — run `caliber config` first'));
       clearSession();
       resetState();
@@ -112,8 +141,9 @@ export async function learnFinalizeCommand(options?: { force?: boolean }) {
     }
 
     const events = readAllEvents();
-    if (events.length < MIN_EVENTS_FOR_ANALYSIS) {
-      console.log(chalk.dim(`caliber: ${events.length}/${MIN_EVENTS_FOR_ANALYSIS} events recorded — need more before analysis`));
+    const threshold = isAuto ? MIN_EVENTS_AUTO : MIN_EVENTS_FOR_ANALYSIS;
+    if (events.length < threshold) {
+      if (!isAuto) console.log(chalk.dim(`caliber: ${events.length}/${threshold} events recorded — need more before analysis`));
       return;
     }
 
@@ -150,12 +180,21 @@ export async function learnFinalizeCommand(options?: { force?: boolean }) {
       newLearningsProduced = result.newItemCount;
 
       if (result.newItemCount > 0) {
-        const wasteLabel = waste.totalWasteTokens > 0
-          ? ` (~${waste.totalWasteTokens.toLocaleString()} wasted tokens captured)`
-          : '';
-        console.log(chalk.dim(`caliber: learned ${result.newItemCount} new pattern${result.newItemCount === 1 ? '' : 's'}${wasteLabel}`));
-        for (const item of result.newItems) {
-          console.log(chalk.dim(`  + ${item.replace(/^- /, '').slice(0, 80)}`));
+        if (isAuto) {
+          writeFinalizeSummary({
+            timestamp: new Date().toISOString(),
+            newItemCount: result.newItemCount,
+            newItems: result.newItems,
+            wasteTokens: waste.totalWasteTokens,
+          });
+        } else {
+          const wasteLabel = waste.totalWasteTokens > 0
+            ? ` (~${waste.totalWasteTokens.toLocaleString()} wasted tokens captured)`
+            : '';
+          console.log(chalk.dim(`caliber: learned ${result.newItemCount} new pattern${result.newItemCount === 1 ? '' : 's'}${wasteLabel}`));
+          for (const item of result.newItems) {
+            console.log(chalk.dim(`  + ${item.replace(/^- /, '').slice(0, 80)}`));
+          }
         }
 
         // Record per-learning cost entries
@@ -185,6 +224,17 @@ export async function learnFinalizeCommand(options?: { force?: boolean }) {
       }
     }
 
+    // Compute task-level metrics from LLM response
+    const tasks = response.tasks || [];
+    let taskSuccessCount = 0;
+    let taskCorrectionCount = 0;
+    let taskFailureCount = 0;
+    for (const t of tasks) {
+      if (t.outcome === 'success') taskSuccessCount++;
+      else if (t.outcome === 'corrected') taskCorrectionCount++;
+      else if (t.outcome === 'failed') taskFailureCount++;
+    }
+
     // Record session ROI summary + learnings in a single write
     const sessionSummary: SessionROISummary = {
       timestamp: new Date().toISOString(),
@@ -196,6 +246,10 @@ export async function learnFinalizeCommand(options?: { force?: boolean }) {
       hadLearningsAvailable: hadLearnings,
       learningsCount: existingLearnedItems,
       newLearningsProduced,
+      taskCount: tasks.length > 0 ? tasks.length : undefined,
+      taskSuccessCount: tasks.length > 0 ? taskSuccessCount : undefined,
+      taskCorrectionCount: tasks.length > 0 ? taskCorrectionCount : undefined,
+      taskFailureCount: tasks.length > 0 ? taskFailureCount : undefined,
     };
     const roiStats = recordSession(sessionSummary, roiLearningEntries);
 
@@ -231,18 +285,26 @@ export async function learnFinalizeCommand(options?: { force?: boolean }) {
     });
 
     // Show savings summary if we have history
-    if (t.estimatedSavingsTokens > 0) {
+    if (!isAuto && t.estimatedSavingsTokens > 0) {
       const totalLearnings = existingLearnedItems + newLearningsProduced;
       console.log(chalk.dim(`caliber: ${totalLearnings} learnings active — est. ~${t.estimatedSavingsTokens.toLocaleString()} tokens saved across ${t.totalSessionsWithLearnings} sessions`));
     }
   } catch (err) {
-    if (options?.force) {
+    if (options?.force && !isAuto) {
       console.error(chalk.red('caliber: finalize failed —'), err instanceof Error ? err.message : err);
     }
   } finally {
     if (analyzed) {
-      clearSession();
-      resetState();
+      if (isIncremental) {
+        // Keep the session going — just mark where we analyzed up to
+        const state = readState();
+        state.lastAnalysisEventCount = state.eventCount;
+        state.lastAnalysisTimestamp = new Date().toISOString();
+        writeState(state);
+      } else {
+        clearSession();
+        resetState();
+      }
     }
     releaseFinalizeLock();
   }

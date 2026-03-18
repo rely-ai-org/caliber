@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { normalizeBullet, hasTypePrefix, isSimilarLearning } from './utils.js';
 
 const LEARNINGS_FILE = 'CALIBER_LEARNINGS.md';
 const LEARNINGS_HEADER = `# Caliber Learnings
@@ -76,22 +77,6 @@ function parseBullets(content: string): string[] {
   return bullets;
 }
 
-const TYPE_PREFIX_RE = /^\*\*\[[^\]]+\]\*\*\s*/;
-
-function normalizeBullet(bullet: string): string {
-  return bullet
-    .replace(/^- /, '')
-    .replace(TYPE_PREFIX_RE, '')
-    .replace(/`[^`]*`/g, '')
-    .replace(/\s+/g, ' ')
-    .toLowerCase()
-    .trim();
-}
-
-function hasTypePrefix(bullet: string): boolean {
-  return TYPE_PREFIX_RE.test(bullet.replace(/^- /, ''));
-}
-
 function deduplicateLearnedItems(
   existing: string | null,
   incoming: string
@@ -104,13 +89,7 @@ function deduplicateLearnedItems(
   for (const bullet of incomingBullets) {
     const norm = normalizeBullet(bullet);
     if (!norm) continue;
-    const dupIdx = merged.findIndex(e => {
-      const eNorm = normalizeBullet(e);
-      const shorter = Math.min(norm.length, eNorm.length);
-      const longer = Math.max(norm.length, eNorm.length);
-      if (!(eNorm.includes(norm) || norm.includes(eNorm))) return false;
-      return shorter / longer > 0.7;
-    });
+    const dupIdx = merged.findIndex(e => isSimilarLearning(bullet, e));
     if (dupIdx !== -1) {
       // Upgrade untyped bullet to typed version
       if (hasTypePrefix(bullet) && !hasTypePrefix(merged[dupIdx])) {

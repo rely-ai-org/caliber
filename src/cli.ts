@@ -18,8 +18,10 @@ import {
   learnRemoveCommand,
   learnStatusCommand,
 } from './commands/learn.js';
+import { insightsCommand } from './commands/insights.js';
 import { setTelemetryDisabled } from './telemetry/config.js';
 import { initTelemetry, trackEvent } from './telemetry/index.js';
+import { checkPendingNotifications } from './lib/notifications.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -78,6 +80,12 @@ program.hook('preAction', (thisCommand) => {
     setTelemetryDisabled(true);
   }
   initTelemetry();
+
+  // Show pending learning notifications (skip for learn subcommands to avoid recursion)
+  const cmdName = thisCommand.name();
+  if (cmdName !== 'learn' && cmdName !== 'observe' && cmdName !== 'finalize') {
+    checkPendingNotifications();
+  }
 });
 
 function parseAgentOption(value: string): ('claude' | 'cursor' | 'codex')[] {
@@ -139,6 +147,7 @@ program
   .option('--json', 'Output as JSON')
   .option('--quiet', 'One-line output for scripts/hooks')
   .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
+  .option('--compare <ref>', 'Compare score against a git ref (branch, tag, or SHA)')
   .action(tracked('score', scoreCommand));
 
 program
@@ -154,6 +163,12 @@ program
   .option('--install', 'Enable all hooks non-interactively')
   .option('--remove', 'Disable all hooks non-interactively')
   .action(tracked('hooks', hooksCommand));
+
+program
+  .command('insights')
+  .description('Show agent performance insights and learning impact')
+  .option('--json', 'Output as JSON')
+  .action(tracked('insights', insightsCommand));
 
 // [In Development] Session learning — not yet ready for public use.
 // The command is functional but hidden from help output.
@@ -172,7 +187,9 @@ learn
   .command('finalize')
   .description('Analyze session events and update CALIBER_LEARNINGS.md (called on SessionEnd)')
   .option('--force', 'Skip the running-process check (for manual invocation)')
-  .action(tracked('learn:finalize', (opts: { force?: boolean }) => learnFinalizeCommand(opts)));
+  .option('--auto', 'Silent mode for hooks (lower threshold, no interactive output)')
+  .option('--incremental', 'Extract learnings mid-session without clearing events')
+  .action(tracked('learn:finalize', (opts: { force?: boolean; auto?: boolean; incremental?: boolean }) => learnFinalizeCommand(opts)));
 
 learn
   .command('install')

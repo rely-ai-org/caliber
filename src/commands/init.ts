@@ -916,6 +916,7 @@ async function promptLearnInstall(targetAgent: TargetAgent): Promise<boolean> {
 
   return select({
     message: 'Enable session learning?',
+    default: true,
     choices: [
       { name: 'Enable session learning (recommended)', value: true },
       { name: 'Skip for now', value: false },

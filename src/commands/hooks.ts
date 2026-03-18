@@ -1,8 +1,13 @@
 import chalk from 'chalk';
+import fs from 'fs';
 import {
   isHookInstalled, installHook, removeHook,
   isPreCommitHookInstalled, installPreCommitHook, removePreCommitHook,
 } from '../lib/hooks.js';
+import {
+  installLearningHooks,
+  installCursorLearningHooks,
+} from '../lib/learning-hooks.js';
 
 interface HookDef {
   id: string;
@@ -55,6 +60,15 @@ export async function hooksCommand(options: { install?: boolean; remove?: boolea
       } else {
         console.log(chalk.green('  ✓') + ` ${hook.label} enabled`);
       }
+    }
+    // Also install learning hooks alongside refresh hooks
+    if (fs.existsSync('.claude')) {
+      const r = installLearningHooks();
+      if (r.installed) console.log(chalk.green('  ✓') + ' Claude Code learning hooks enabled');
+    }
+    if (fs.existsSync('.cursor')) {
+      const r = installCursorLearningHooks();
+      if (r.installed) console.log(chalk.green('  ✓') + ' Cursor learning hooks enabled');
     }
     return;
   }

@@ -11,10 +11,22 @@ interface LearnedSkill {
   isNew: boolean;
 }
 
+interface TaskSegment {
+  summary: string;
+  outcome: 'success' | 'corrected' | 'failed';
+  startEventIdx: number;
+  endEventIdx: number;
+  attribution?: {
+    configSection: string;
+    relevance: number;
+  };
+}
+
 interface AnalysisResult {
   claudeMdLearnedSection: string | null;
   skills: LearnedSkill[] | null;
   explanations: string[];
+  tasks?: TaskSegment[];
 }
 
 const MAX_PROMPT_TOKENS = 100_000;
@@ -102,13 +114,25 @@ export async function analyzeEvents(
     contextParts.push(`## Existing Skills\n\n${skillsSummary}`);
   }
 
-  const prompt = `${contextParts.length ? contextParts.join('\n\n---\n\n') + '\n\n---\n\n' : ''}## Tool Events from Session (${fittedEvents.length} events)\n\n${eventsText}`;
+  contextParts.push(`## Task Segmentation & Attribution Instructions
+
+Analyze the event timeline and identify logical tasks (a task = one user intent, from their prompt through the agent's work until the next user prompt or session end).
+
+For each task, determine:
+- "summary": what the user was trying to accomplish (1 sentence)
+- "outcome": "success" (completed without issues), "corrected" (user had to redirect the agent), or "failed" (task was abandoned or produced errors)
+- "startEventIdx" and "endEventIdx": 0-based indices in the event list
+- "attribution": if the task was corrected or failed, identify which section of CLAUDE.md (by ## heading) SHOULD have contained guidance that would have prevented the issue. Include "configSection" (the heading text) and "relevance" (0-1).
+
+Include the "tasks" array in your JSON response alongside "claudeMdLearnedSection", "skills", and "explanations".`);
+
+  const prompt = `${contextParts.join('\n\n---\n\n')}\n\n---\n\n## Tool Events from Session (${fittedEvents.length} events)\n\n${eventsText}`;
 
   const fastModel = getFastModel();
   const raw = await llmCall({
     system: LEARN_SYSTEM_PROMPT,
     prompt,
-    maxTokens: 4096,
+    maxTokens: 8192,
     ...(fastModel ? { model: fastModel } : {}),
   });
 

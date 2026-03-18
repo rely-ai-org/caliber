@@ -1,0 +1,34 @@
+name: 'Caliber Score'
+description: 'Score your AI agent configuration quality and comment on PRs'
+branding:
+  icon: 'zap'
+  color: 'blue'
+
+inputs:
+  agent:
+    description: 'Target agent: claude, cursor, or codex'
+    default: 'claude'
+  fail-below:
+    description: 'Minimum score to pass (0-100). Action fails if score is below this.'
+    default: '0'
+  comment:
+    description: 'Post/update a comment on the PR with the score'
+    default: 'true'
+  auto-refresh:
+    description: 'Run caliber refresh and commit updated configs if stale'
+    default: 'false'
+  github-token:
+    description: 'GitHub token for PR comments'
+    default: '${{ github.token }}'
+
+outputs:
+  score:
+    description: 'Current score (0-100)'
+  grade:
+    description: 'Letter grade (A-F)'
+  delta:
+    description: 'Score change from base branch (e.g. +5 or -3)'
+
+runs:
+  using: 'node20'
+  main: 'index.js'

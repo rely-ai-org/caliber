@@ -94,8 +94,8 @@ describe('ROI stats', () => {
 
   it('recordSession with learnings appends both and updates waste total', () => {
     const learnings = [
-      makeLearningEntry({ wasteTokens: 300 }),
-      makeLearningEntry({ wasteTokens: 200, observationType: 'fix' }),
+      makeLearningEntry({ wasteTokens: 300, summary: 'tsup swallows type errors' }),
+      makeLearningEntry({ wasteTokens: 200, observationType: 'fix', summary: 'always run npm ci before deploy' }),
     ];
     recordSession(makeSession(), learnings);
 

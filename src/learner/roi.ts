@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { LEARNING_DIR, LEARNING_ROI_FILE } from '../constants.js';
 import { ensureLearningDir } from './storage.js';
+import { isSimilarLearning } from './utils.js';
 
 export interface LearningCostEntry {
   timestamp: string;
@@ -9,6 +10,7 @@ export interface LearningCostEntry {
   summary: string;
   wasteTokens: number;
   sourceEventCount: number;
+  occurrences?: number;
 }
 
 export interface SessionROISummary {
@@ -21,6 +23,10 @@ export interface SessionROISummary {
   hadLearningsAvailable: boolean;
   learningsCount: number;
   newLearningsProduced: number;
+  taskCount?: number;
+  taskSuccessCount?: number;
+  taskCorrectionCount?: number;
+  taskFailureCount?: number;
 }
 
 export interface ROITotals {
@@ -114,7 +120,16 @@ export function recordSession(summary: SessionROISummary, learnings?: LearningCo
   const stats = readROIStats();
   stats.sessions.push(summary);
   if (learnings?.length) {
-    stats.learnings.push(...learnings);
+    for (const entry of learnings) {
+      const existingIdx = stats.learnings.findIndex(e => isSimilarLearning(e.summary, entry.summary));
+      if (existingIdx !== -1) {
+        stats.learnings[existingIdx].occurrences = (stats.learnings[existingIdx].occurrences || 1) + 1;
+        stats.learnings[existingIdx].timestamp = entry.timestamp;
+      } else {
+        entry.occurrences = 1;
+        stats.learnings.push(entry);
+      }
+    }
   }
   if (stats.sessions.length > MAX_SESSIONS) {
     stats.sessions = stats.sessions.slice(-MAX_SESSIONS);
@@ -127,7 +142,7 @@ export function recordSession(summary: SessionROISummary, learnings?: LearningCo
   return stats;
 }
 
-function formatDuration(seconds: number): string {
+export function formatDuration(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const mins = Math.floor(seconds / 60);
   const secs = Math.round(seconds % 60);

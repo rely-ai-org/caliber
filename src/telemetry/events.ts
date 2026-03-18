@@ -141,3 +141,9 @@ export function trackLearnNewLearning(props: {
     source_event_count: props.sourceEventCount,
   });
 }
+
+// --- Insights events ---
+
+export function trackInsightsViewed(totalSessions: number, learningCount: number): void {
+  trackEvent('insights_viewed', { total_sessions: totalSessions, learning_count: learningCount });
+}

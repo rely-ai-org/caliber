@@ -10,7 +10,7 @@ const HOOK_TAILS = [
   { event: 'PostToolUse', tail: 'learn observe', description: 'Caliber: recording tool usage for session learning' },
   { event: 'PostToolUseFailure', tail: 'learn observe --failure', description: 'Caliber: recording tool failure for session learning' },
   { event: 'UserPromptSubmit', tail: 'learn observe --prompt', description: 'Caliber: recording user prompt for correction detection' },
-  { event: 'SessionEnd', tail: 'learn finalize', description: 'Caliber: finalizing session learnings' },
+  { event: 'SessionEnd', tail: 'learn finalize --auto', description: 'Caliber: finalizing session learnings' },
 ] as const;
 
 function getHookConfigs() {
@@ -103,7 +103,7 @@ const CURSOR_HOOK_EVENTS = [
   { event: 'postToolUse', tail: 'learn observe' },
   { event: 'postToolUseFailure', tail: 'learn observe --failure' },
   { event: 'userPromptSubmit', tail: 'learn observe --prompt' },
-  { event: 'sessionEnd', tail: 'learn finalize' },
+  { event: 'sessionEnd', tail: 'learn finalize --auto' },
 ] as const;
 
 interface CursorHooksConfig {
