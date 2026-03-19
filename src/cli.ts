@@ -17,6 +17,8 @@ import {
   learnInstallCommand,
   learnRemoveCommand,
   learnStatusCommand,
+  learnListCommand,
+  learnDeleteCommand,
 } from './commands/learn.js';
 import { insightsCommand } from './commands/insights.js';
 import { sourcesListCommand, sourcesAddCommand, sourcesRemoveCommand } from './commands/sources.js';
@@ -90,22 +92,22 @@ program.hook('preAction', (thisCommand) => {
   }
 });
 
-function parseAgentOption(value: string): ('claude' | 'cursor' | 'codex')[] {
+function parseAgentOption(value: string): ('claude' | 'cursor' | 'codex' | 'github-copilot')[] {
   if (value === 'both') return ['claude', 'cursor'];
-  if (value === 'all') return ['claude', 'cursor', 'codex'];
-  const valid = ['claude', 'cursor', 'codex'];
+  if (value === 'all') return ['claude', 'cursor', 'codex', 'github-copilot'];
+  const valid = ['claude', 'cursor', 'codex', 'github-copilot'];
   const agents = [...new Set(value.split(',').map(s => s.trim().toLowerCase()).filter(a => valid.includes(a)))];
   if (agents.length === 0) {
-    console.error(`Invalid agent "${value}". Choose from: claude, cursor, codex (comma-separated for multiple)`);
+    console.error(`Invalid agent "${value}". Choose from: claude, cursor, codex, github-copilot (comma-separated for multiple)`);
     process.exit(1);
   }
-  return agents as ('claude' | 'cursor' | 'codex')[];
+  return agents as ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
 }
 
 program
   .command('init')
   .description('Initialize your project for AI-assisted development')
-  .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
+  .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex, github-copilot', parseAgentOption)
   .option('--source <paths...>', 'Related source paths to include as context')
   .option('--dry-run', 'Preview changes without writing files')
   .option('--force', 'Overwrite existing setup without prompting')
@@ -149,7 +151,7 @@ program
   .description('Score your current agent config setup (deterministic, no network)')
   .option('--json', 'Output as JSON')
   .option('--quiet', 'One-line output for scripts/hooks')
-  .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
+  .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex, github-copilot', parseAgentOption)
   .option('--compare <ref>', 'Compare score against a git ref (branch, tag, or SHA)')
   .action(tracked('score', scoreCommand));
 
@@ -234,5 +236,16 @@ learn
   .command('status')
   .description('Show learning system status')
   .action(tracked('learn:status', learnStatusCommand));
+
+learn
+  .command('list')
+  .description('List all learnings with their source and activation data')
+  .option('--verbose', 'Show explanations and activation counts')
+  .action(tracked('learn:list', (opts: { verbose?: boolean }) => learnListCommand(opts)));
+
+learn
+  .command('delete <index>')
+  .description('Delete a learning by its index number (from `caliber learn list`)')
+  .action(tracked('learn:delete', (index: string) => learnDeleteCommand(index)));
 
 export { program };

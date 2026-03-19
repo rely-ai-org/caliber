@@ -151,6 +151,10 @@ export const CODEX_ONLY_CHECKS = new Set([
   'codex_agents_md_exists',
 ]);
 
+export const COPILOT_ONLY_CHECKS = new Set([
+  'copilot_instructions_exists',
+]);
+
 /** Checks that should NOT appear for codex targets (avoid double-counting). */
 export const NON_CODEX_CHECKS = new Set([
   'agents_md_exists',

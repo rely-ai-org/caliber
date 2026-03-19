@@ -78,7 +78,7 @@ export async function initCommand(options: InitOptions) {
    ╚═════╝╚═╝  ╚═╝╚══════╝╚═╝╚═════╝ ╚══════╝╚═╝  ╚═╝
   `));
     console.log(chalk.dim('  Scan your project and generate tailored config files for'));
-    console.log(chalk.dim('  Claude Code, Cursor, and Codex.\n'));
+    console.log(chalk.dim('  Claude Code, Cursor, Codex, and GitHub Copilot.\n'));
 
     console.log(title.bold('  How it works:\n'));
     console.log(chalk.dim('  1. Setup      Connect your LLM provider and select your agents'));

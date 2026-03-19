@@ -6,7 +6,7 @@ import { CORE_GENERATION_PROMPT, GENERATION_SYSTEM_PROMPT, SKILL_GENERATION_PROM
 import { extractAllDeps } from '../utils/dependencies.js';
 import { formatSourcesForPrompt } from '../fingerprint/sources.js';
 
-type TargetAgent = ('claude' | 'cursor' | 'codex')[];
+type TargetAgent = ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
 
 interface GenerateCallbacks {
   onStatus: (message: string) => void;
@@ -596,6 +596,10 @@ export function buildGeneratePrompt(
     if (existing.cursorSkills.length > LIMITS.SKILLS_MAX) {
       parts.push(`\n(${existing.cursorSkills.length - LIMITS.SKILLS_MAX} more skills omitted)`);
     }
+  }
+
+  if (existing.personalLearnings) {
+    parts.push(`\n--- Personal Learnings (developer-specific, include in generated configs) ---\n${existing.personalLearnings}`);
   }
 
   const allDeps = extractAllDeps(process.cwd());

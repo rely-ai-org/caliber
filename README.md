@@ -6,56 +6,93 @@
   <a href="https://www.npmjs.com/package/@rely-ai/caliber"><img src="https://img.shields.io/npm/v/@rely-ai/caliber" alt="npm version"></a>
   <a href="./LICENSE"><img src="https://img.shields.io/npm/l/@rely-ai/caliber" alt="license"></a>
   <a href="https://nodejs.org"><img src="https://img.shields.io/node/v/@rely-ai/caliber" alt="node"></a>
+  <img src="https://img.shields.io/badge/caliber-89%2F100-green" alt="Caliber Score">
+  <img src="https://img.shields.io/badge/Claude_Code-supported-blue" alt="Claude Code">
+  <img src="https://img.shields.io/badge/Cursor-supported-blue" alt="Cursor">
+  <img src="https://img.shields.io/badge/Codex-supported-blue" alt="Codex">
 </p>
+
+---
+
+### Try it — zero install, zero commitment
+
+```bash
+npx @rely-ai/caliber score
+```
+
+Score your AI agent config in 3 seconds. No API key. No changes to your code. Just a score.
+
+> **Your code stays on your machine.** Scoring is 100% local — no LLM calls, no code sent anywhere. Generation uses your own AI subscription (Claude Code, Cursor) or your own API key (Anthropic, OpenAI, Vertex AI). Caliber never sees your code.
+
+---
+
+Caliber scores, generates, and keeps your AI agent configs in sync with your codebase. It fingerprints your project — languages, frameworks, dependencies, architecture — and produces tailored configs for **Claude Code**, **Cursor**, and **OpenAI Codex**. When your code evolves, Caliber detects the drift and updates your configs to match.
 
 <p align="center">
   <img src="assets/demo.gif" alt="Caliber demo" width="640">
 </p>
 
----
+## Before / After
 
-Caliber analyzes your codebase — languages, frameworks, dependencies, architecture — and generates tailored, high-quality configs for **Claude Code**, **Cursor**, and **OpenAI Codex**. If configs already exist, it scores them, fixes what's stale, and keeps everything in sync as your code evolves.
+Most repos start with a hand-written `CLAUDE.md` and nothing else. Here's what Caliber finds — and fixes:
+
+```
+  Before                                    After caliber init
+  ──────────────────────────────            ──────────────────────────────
+
+  Agent Config Score    35 / 100            Agent Config Score    94 / 100
+  Grade D                                   Grade A
+
+  FILES & SETUP           6 / 25            FILES & SETUP          24 / 25
+  QUALITY                12 / 25            QUALITY                22 / 25
+  GROUNDING               7 / 20            GROUNDING              19 / 20
+  ACCURACY                5 / 15            ACCURACY               13 / 15
+  FRESHNESS               5 / 10            FRESHNESS              10 / 10
+  BONUS                   0 / 5             BONUS                   5 / 5
+```
+
+Scoring is deterministic — no LLM, no API calls. It cross-references your config files against your actual project filesystem: do referenced paths exist? Are code blocks present? Is there config drift since your last commit?
 
 ```bash
-npm install -g @rely-ai/caliber
-caliber init
+caliber score --compare main    # See how your branch changed the score
 ```
 
-No API key required — works with your existing **Claude Code** or **Cursor** subscription. Or bring your own key (Anthropic, OpenAI, Vertex AI, any OpenAI-compatible endpoint).
+## Audits first, writes second
 
-## 💡 What Caliber Does
+Caliber never overwrites your existing configs without asking. The workflow mirrors code review:
 
-| Without Caliber | With Caliber |
-|---|---|
-| Hand-write CLAUDE.md, Cursor rules, AGENTS.md separately | One command generates all three, tuned to your actual codebase |
-| Configs reference files that no longer exist | Deterministic scoring catches stale references and drift |
-| New team members start with no AI context | `caliber init` gives any contributor a complete setup in seconds |
-| Configs diverge across AI tools | Cross-platform parity — Claude, Cursor, and Codex stay consistent |
-| No idea if your config is actually helping | Score your setup (A–F grade) and see exactly what to improve |
-| AI keeps making the same mistakes | Session learning captures patterns and corrections automatically |
+1. **Score** — read-only audit of your current setup
+2. **Propose** — generate or improve configs, shown as a diff
+3. **Review** — accept, refine via chat, or decline each change
+4. **Backup** — originals saved to `.caliber/backups/` before every write
+5. **Undo** — `caliber undo` restores everything to its previous state
 
-## ⚙️ How It Works
+If your existing config scores **95+**, Caliber skips full regeneration and applies targeted fixes to the specific checks that are failing.
+
+## How It Works
+
+Caliber is not a one-time setup tool. It's a loop:
 
 ```
-caliber init
-│
-├─ 1. 🔌 Setup        Choose your LLM provider — Claude Code seat, Cursor seat,
-│                      or an API key (Anthropic, OpenAI, Vertex AI)
-│
-├─ 2. 🛠️  Engine       Fingerprint your project, generate configs in parallel,
-│                      search community skills, and auto-refine against
-│                      deterministic scoring checks (up to 2 iterations)
-│
-├─ 3. 👀 Review       See a diff of every proposed change — accept, refine
-│                      via chat, or decline. All originals are backed up
-│
-└─ 4. ✅ Finalize     Write files, install auto-refresh hooks, and set up
-                       session learning for continuous improvement
+          caliber score
+              │
+              ▼
+  ┌──── caliber init ◄────────────────┐
+  │     (generate / fix)              │
+  │           │                       │
+  │           ▼                       │
+  │     your code evolves             │
+  │     (new deps, renamed files,     │
+  │      changed architecture)        │
+  │           │                       │
+  │           ▼                       │
+  └──► caliber refresh ──────────────►┘
+       (detect drift, update configs)
 ```
 
-Already have a setup? If your existing config scores **95+**, Caliber skips full regeneration and applies targeted fixes to the specific checks that are failing.
+Auto-refresh hooks run this loop automatically — on every commit or at the end of each AI coding session.
 
-### 📦 What It Generates
+### What It Generates
 
 **Claude Code**
 - `CLAUDE.md` — Project context, build/test commands, architecture, conventions
@@ -73,14 +110,18 @@ Already have a setup? If your existing config scores **95+**, Caliber skips full
 - `AGENTS.md` — Project context for Codex
 - `.agents/skills/*/SKILL.md` — Skills for Codex
 
-If these files already exist, Caliber audits them and suggests improvements — keeping what works, fixing what's stale, adding what's missing.
+## Key Features
 
-## ✨ Key Features
+<details>
+<summary><strong>Any Codebase</strong></summary>
 
-### 🌍 Any Codebase
 TypeScript, Python, Go, Rust, Java, Ruby, Terraform, and more. Language and framework detection is fully LLM-driven — no hardcoded mappings. Caliber works on any project.
 
-### 🔀 Any AI Tool
+</details>
+
+<details>
+<summary><strong>Any AI Tool</strong></summary>
+
 Target a single platform or all three at once:
 ```bash
 caliber init --agent claude        # Claude Code only
@@ -90,28 +131,26 @@ caliber init --agent all           # All three
 caliber init --agent claude,cursor # Comma-separated
 ```
 
-### 💬 Chat-Based Refinement
-Not happy with the generated output? During review, refine via natural language — describe what you want changed and Caliber iterates until you're satisfied.
-
-### 🔗 MCP Server Discovery
-Caliber detects the tools your project uses (databases, APIs, services) and auto-configures matching MCP servers for Claude Code and Cursor.
-
-### 📊 Deterministic Scoring
-`caliber score` evaluates your config quality without any LLM calls — purely by cross-referencing config files against your actual project filesystem.
-
-```
-  Agent Config Score    88 / 100    Grade A
-
-  FILES & SETUP                                17 / 17
-  QUALITY                                      21 / 23
-  GROUNDING                                    20 / 20
-  ACCURACY                                     10 / 15
-  FRESHNESS & SAFETY                           10 / 10
-  BONUS                                         5 / 5
-```
+</details>
 
 <details>
-<summary>Scoring breakdown</summary>
+<summary><strong>Chat-Based Refinement</strong></summary>
+
+Not happy with the generated output? During review, refine via natural language — describe what you want changed and Caliber iterates until you're satisfied.
+
+</details>
+
+<details>
+<summary><strong>MCP Server Discovery</strong></summary>
+
+Caliber detects the tools your project uses (databases, APIs, services) and auto-configures matching MCP servers for Claude Code and Cursor.
+
+</details>
+
+<details>
+<summary><strong>Deterministic Scoring</strong></summary>
+
+`caliber score` evaluates your config quality without any LLM calls — purely by cross-referencing config files against your actual project filesystem.
 
 | Category | Points | What it checks |
 |---|---|---|
@@ -126,7 +165,9 @@ Every failing check includes structured fix data — when `caliber init` runs, t
 
 </details>
 
-### 🧠 Session Learning
+<details>
+<summary><strong>Session Learning</strong></summary>
+
 Caliber watches your AI coding sessions and learns from them. Hooks capture tool usage, failures, and your corrections — then an LLM distills operational patterns into `CALIBER_LEARNINGS.md`.
 
 ```bash
@@ -136,9 +177,13 @@ caliber learn finalize     # Manually trigger analysis (auto-runs on session end
 caliber learn remove       # Remove hooks
 ```
 
-Learned items are categorized by type — **[correction]**, **[gotcha]**, **[fix]**, **[pattern]**, **[env]**, **[convention]** — and automatically deduplicated. ROI tracking shows how much time and tokens the learnings save across sessions.
+Learned items are categorized by type — **[correction]**, **[gotcha]**, **[fix]**, **[pattern]**, **[env]**, **[convention]** — and automatically deduplicated.
 
-### 🔄 Auto-Refresh
+</details>
+
+<details>
+<summary><strong>Auto-Refresh</strong></summary>
+
 Keep configs in sync with your codebase automatically:
 
 | Hook | Trigger | What it does |
@@ -150,24 +195,29 @@ Keep configs in sync with your codebase automatically:
 ```bash
 caliber hooks --install    # Enable refresh hooks
 caliber hooks --remove     # Disable refresh hooks
-caliber learn install      # Enable learning hooks
 ```
 
-The `refresh` command analyzes your git diff (committed, staged, and unstaged changes) and updates config files to reflect what changed. Works across multiple repos when run from a parent directory.
+The `refresh` command analyzes your git diff (committed, staged, and unstaged changes) and updates config files to reflect what changed.
 
-### 🛡️ Fully Reversible
-Every change Caliber makes can be undone:
+</details>
+
+<details>
+<summary><strong>Fully Reversible</strong></summary>
+
 - **Automatic backups** — originals saved to `.caliber/backups/` before every write
 - **Score regression guard** — if a regeneration produces a lower score, changes are auto-reverted
 - **Full undo** — `caliber undo` restores everything to its previous state
 - **Dry run** — preview changes with `--dry-run` before applying
 
-## 📋 Commands
+</details>
+
+## Commands
 
 | Command | Description |
 |---|---|
-| `caliber init` | Full setup wizard — analyze, generate, review, install hooks |
 | `caliber score` | Score config quality (deterministic, no LLM) |
+| `caliber score --compare <ref>` | Compare current score against a git ref |
+| `caliber init` | Full setup wizard — analyze, generate, review, install hooks |
 | `caliber regenerate` | Re-analyze and regenerate configs (aliases: `regen`, `re`) |
 | `caliber refresh` | Update docs based on recent code changes |
 | `caliber skills` | Discover and install community skills |
@@ -177,7 +227,60 @@ Every change Caliber makes can be undone:
 | `caliber status` | Show current setup status |
 | `caliber undo` | Revert all changes made by Caliber |
 
-## 🔌 LLM Providers
+## FAQ
+
+<details>
+<summary><strong>Does it overwrite my existing configs?</strong></summary>
+
+No. Caliber shows you a diff of every proposed change. You accept, refine, or decline each one. Originals are backed up automatically.
+
+</details>
+
+<details>
+<summary><strong>Does it need an API key?</strong></summary>
+
+**Scoring:** No. `caliber score` runs 100% locally with no LLM.
+
+**Generation:** Uses your existing Claude Code or Cursor subscription (no API key needed), or bring your own key for Anthropic, OpenAI, or Vertex AI.
+
+</details>
+
+<details>
+<summary><strong>What if I don't like what it generates?</strong></summary>
+
+Refine it via chat during review, or decline the changes entirely. If you already accepted, `caliber undo` restores everything. You can also preview with `--dry-run`.
+
+</details>
+
+<details>
+<summary><strong>Does it work with monorepos?</strong></summary>
+
+Yes. Run `caliber init` from any directory. `caliber refresh` can update configs across multiple repos when run from a parent directory.
+
+</details>
+
+<details>
+<summary><strong>Does it send my code anywhere?</strong></summary>
+
+Scoring is fully local. Generation sends your project fingerprint (not source code) to whatever LLM provider you configure — the same provider your AI editor already uses. Anonymous usage analytics (no code, no file contents) can be disabled via `caliber config`.
+
+</details>
+
+## Add a Caliber badge to your repo
+
+After scoring your project, add a badge to your README:
+
+![Caliber Score](https://img.shields.io/badge/caliber-94%2F100-brightgreen)
+
+Copy this markdown and replace `94` with your actual score:
+
+```
+![Caliber Score](https://img.shields.io/badge/caliber-SCORE%2F100-COLOR)
+```
+
+Color guide: `brightgreen` (90+), `green` (70-89), `yellow` (40-69), `red` (<40).
+
+## LLM Providers
 
 No API key? No problem. Caliber works with your existing AI tool subscription:
 
@@ -234,12 +337,12 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 </details>
 
-## 📋 Requirements
+## Requirements
 
 - **Node.js** >= 20
 - **One LLM provider:** your **Claude Code** or **Cursor** subscription (no API key), or an API key for Anthropic / OpenAI / Vertex AI
 
-## 🤝 Contributing
+## Contributing
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed guidelines.
 
@@ -254,6 +357,6 @@ npm run build    # Compile
 
 Uses [conventional commits](https://www.conventionalcommits.org/) — `feat:` for features, `fix:` for bug fixes.
 
-## 📄 License
+## License
 
 MIT

@@ -11,7 +11,7 @@ import { llmJsonCall } from '../llm/index.js';
 import { promptReviewMethod, openReview } from '../utils/review.js';
 import type { StageResult } from '../writers/staging.js';
 
-export type TargetAgent = ('claude' | 'cursor' | 'codex')[];
+export type TargetAgent = ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
 export type HookChoice = 'claude' | 'precommit' | 'both' | 'skip';
 type ReviewAction = 'accept' | 'refine' | 'decline';
 
@@ -20,6 +20,7 @@ export function detectAgents(dir: string): TargetAgent {
   if (fs.existsSync(`${dir}/.claude`)) agents.push('claude');
   if (fs.existsSync(`${dir}/.cursor`)) agents.push('cursor');
   if (fs.existsSync(`${dir}/.agents`) || fs.existsSync(`${dir}/AGENTS.md`)) agents.push('codex');
+  if (fs.existsSync(`${dir}/.github/copilot-instructions.md`)) agents.push('github-copilot');
   return agents;
 }
 
@@ -28,6 +29,7 @@ export async function promptAgent(detected?: TargetAgent): Promise<TargetAgent> 
     { name: 'Claude Code', value: 'claude' as const, checked: detected?.includes('claude') ?? false },
     { name: 'Cursor', value: 'cursor' as const, checked: detected?.includes('cursor') ?? false },
     { name: 'Codex (OpenAI)', value: 'codex' as const, checked: detected?.includes('codex') ?? false },
+    { name: 'GitHub Copilot', value: 'github-copilot' as const, checked: detected?.includes('github-copilot') ?? false },
   ];
 
   const hasDefaults = detected && detected.length > 0;
@@ -125,7 +127,7 @@ export async function classifyRefineIntent(message: string): Promise<boolean> {
   const fastModel = getFastModel();
   try {
     const result = await llmJsonCall<{ valid: boolean }>({
-      system: `You classify whether a user message is a valid request to modify AI agent config files (CLAUDE.md, .cursorrules, skills).
+      system: `You classify whether a user message is a valid request to modify AI agent config files (CLAUDE.md, .cursorrules, copilot-instructions.md, skills).
 Valid: requests to add, remove, change, or restructure config content. Examples: "add testing commands", "remove the terraform section", "make CLAUDE.md shorter".
 Invalid: questions, requests to show/display something, general chat, or anything that isn't a concrete config change.
 Return {"valid": true} or {"valid": false}. Nothing else.`,

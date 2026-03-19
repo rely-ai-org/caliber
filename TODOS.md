@@ -26,7 +26,7 @@
 **Why:** Teams have org-wide rules (commit style, PR process, testing standards) that should appear in every repo's config without per-repo configuration. Currently requires each repo to list an org-standards repo as a source or manually add rules to every CLAUDE.md.
 **Pros:** Zero per-repo config for org-wide conventions. Team leads set rules once.
 **Cons:** Distribution problem — how do rules reach 20 developers' machines? Needs design thinking about sync mechanisms (git submodule? caliber org sync? shared config repo?).
-**Context:** Deferred from multi-source CEO review (Proposal 7). Per-repo sources ship first to learn how teams actually share context. Design the org-level flow informed by real usage patterns. See CEO plan: `~/.gstack/projects/rely-ai-org-caliber/ceo-plans/2026-03-19-multi-source-context.md`.
+**Context:** Deferred from multi-source CEO review (Proposal 7). Per-repo sources ship first to learn how teams actually share context. Design the org-level flow informed by real usage patterns.
 **Effort:** M (human: ~1 week / CC: ~1 hour)
 **Depends on:** Multi-source Phase 1 shipped and validated.
 
@@ -47,6 +47,20 @@
 **Context:** The `fetchSkillContent` pattern in `src/commands/recommend.ts` is reusable. Cache aggressively — URLs don't change often. Deferred from multi-source CEO review.
 **Effort:** M (human: ~1 week / CC: ~1 hour)
 **Depends on:** Multi-source Phase 1 shipped.
+
+## P3: Refactor cross-platform parity scoring for N agents
+**What:** Change parity check from hardcoded `hasClaudeConfigs && hasCursorConfigs` to "any 2 of N configured platforms."
+**Why:** With GitHub Copilot as a 4th agent, the parity check ignores Copilot entirely. Users targeting Claude+Copilot don't get parity points.
+**Context:** `src/scoring/checks/existence.ts:197-223`. The `hasParity` variable is currently `hasClaudeConfigs && hasCursorConfigs`. Refactor to count platforms with configs and check `>= 2`. Changes scoring semantics — users who only target non-Claude+Cursor pairs would newly get parity points.
+**Effort:** S (human: ~1 hr / CC: ~5 min)
+**Depends on:** Copilot support.
+
+## P3: Dynamic score badge service
+**What:** HTTP endpoint (e.g. Cloudflare Worker) that returns a shields.io-compatible badge with a repo's Caliber score, auto-updated from CI.
+**Why:** Users embed auto-updating score badges in their READMEs — every badge is a free acquisition channel. Gamification drives score improvement.
+**Context:** Static badge template ships in the README reposition PR. Dynamic version needs a small API that reads score from CI artifacts or a score registry. Could use shields.io endpoint badge format.
+**Effort:** M (human: ~1 week / CC: ~2 hrs)
+**Depends on:** CI integration for automated score computation.
 
 ## P3: Windows CI test runner
 **What:** Add a Windows GitHub Actions runner to test seat-based providers on Windows.

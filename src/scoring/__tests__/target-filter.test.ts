@@ -46,6 +46,19 @@ describe('detectTargetAgent', () => {
     expect(detectTargetAgent(dir)).toEqual(['codex']);
   });
 
+  it('returns [github-copilot] when only .github/copilot-instructions.md exists', () => {
+    mkdirSync(join(dir, '.github'), { recursive: true });
+    writeFileSync(join(dir, '.github', 'copilot-instructions.md'), '# Instructions');
+    expect(detectTargetAgent(dir)).toEqual(['github-copilot']);
+  });
+
+  it('returns [claude, github-copilot] when CLAUDE.md and copilot-instructions.md exist', () => {
+    writeFileSync(join(dir, 'CLAUDE.md'), '# Config');
+    mkdirSync(join(dir, '.github'), { recursive: true });
+    writeFileSync(join(dir, '.github', 'copilot-instructions.md'), '# Instructions');
+    expect(detectTargetAgent(dir)).toEqual(['claude', 'github-copilot']);
+  });
+
   it('returns [claude, codex] when CLAUDE.md and .codex exist', () => {
     writeFileSync(join(dir, 'CLAUDE.md'), '# Config');
     mkdirSync(join(dir, '.codex'), { recursive: true });
@@ -182,5 +195,31 @@ describe('computeLocalScore target filtering', () => {
     expect(checkIds).toContain('codex_agents_md_exists');
     expect(checkIds).not.toContain('cursor_rules_exist');
     expect(checkIds).not.toContain('cross_platform_parity');
+  });
+
+  it('excludes copilot checks when target is [claude]', () => {
+    const result = computeLocalScore(dir, ['claude']);
+    const checkIds = result.checks.map((c) => c.id);
+
+    expect(checkIds).not.toContain('copilot_instructions_exists');
+  });
+
+  it('includes copilot checks when target is [github-copilot]', () => {
+    const result = computeLocalScore(dir, ['github-copilot']);
+    const checkIds = result.checks.map((c) => c.id);
+
+    expect(checkIds).toContain('copilot_instructions_exists');
+    expect(checkIds).not.toContain('claude_md_exists');
+    expect(checkIds).not.toContain('cursor_rules_exist');
+    expect(checkIds).not.toContain('codex_agents_md_exists');
+  });
+
+  it('scores higher when copilot-instructions.md exists for github-copilot target', () => {
+    const before = computeLocalScore(dir, ['github-copilot']);
+    mkdirSync(join(dir, '.github'), { recursive: true });
+    writeFileSync(join(dir, '.github', 'copilot-instructions.md'), '# Project\n\n## Commands\n\n```bash\nnpm run build\nnpm test\n```\n');
+    const after = computeLocalScore(dir, ['github-copilot']);
+
+    expect(after.score).toBeGreaterThan(before.score);
   });
 });

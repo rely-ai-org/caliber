@@ -2,6 +2,7 @@ import fs from 'fs';
 import { writeClaudeConfig } from './claude/index.js';
 import { writeCursorConfig } from './cursor/index.js';
 import { writeCodexConfig } from './codex/index.js';
+import { writeGithubCopilotConfig } from './github-copilot/index.js';
 import { createBackup, restoreBackup } from './backup.js';
 import {
   readManifest,
@@ -12,11 +13,12 @@ import {
 } from './manifest.js';
 
 interface AgentSetup {
-  targetAgent: ('claude' | 'cursor' | 'codex')[];
+  targetAgent: ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
   deletions?: Array<{ filePath: string; reason: string }>;
   claude?: Parameters<typeof writeClaudeConfig>[0];
   cursor?: Parameters<typeof writeCursorConfig>[0];
   codex?: Parameters<typeof writeCodexConfig>[0];
+  copilot?: Parameters<typeof writeGithubCopilotConfig>[0];
 }
 
 export function writeSetup(setup: AgentSetup): { written: string[]; deleted: string[]; backupDir?: string } {
@@ -43,6 +45,10 @@ export function writeSetup(setup: AgentSetup): { written: string[]; deleted: str
 
   if (setup.targetAgent.includes('codex') && setup.codex) {
     written.push(...writeCodexConfig(setup.codex));
+  }
+
+  if (setup.targetAgent.includes('github-copilot') && setup.copilot) {
+    written.push(...writeGithubCopilotConfig(setup.copilot));
   }
 
   const deleted: string[] = [];
@@ -131,6 +137,13 @@ function getFilesToWrite(setup: AgentSetup): string[] {
     files.push('AGENTS.md');
     if (setup.codex.skills) {
       for (const s of setup.codex.skills) files.push(`.agents/skills/${s.name}/SKILL.md`);
+    }
+  }
+
+  if (setup.targetAgent.includes('github-copilot') && setup.copilot) {
+    if (setup.copilot.instructions) files.push('.github/copilot-instructions.md');
+    if (setup.copilot.instructionFiles) {
+      for (const f of setup.copilot.instructionFiles) files.push(`.github/instructions/${f.filename}`);
     }
   }
 

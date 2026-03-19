@@ -38,4 +38,40 @@ describe('writeRefreshDocs', () => {
     const written = writeRefreshDocs({});
     expect(written).toEqual([]);
   });
+
+  it('writes copilot instructions when provided', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const written = writeRefreshDocs({
+      copilotInstructions: '# Updated Copilot Instructions',
+    });
+
+    expect(written).toContain('.github/copilot-instructions.md');
+    expect(vi.mocked(fs.mkdirSync)).toHaveBeenCalledWith('.github', { recursive: true });
+  });
+
+  it('writes copilot instruction files when provided', () => {
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+
+    const written = writeRefreshDocs({
+      copilotInstructionFiles: [
+        { filename: 'ts.instructions.md', content: '---\napplyTo: "**/*.ts"\n---\n\nUse strict.' },
+      ],
+    });
+
+    const instrPath = written.find(p => p.includes('ts.instructions.md'));
+    expect(instrPath).toBeDefined();
+    expect(vi.mocked(fs.mkdirSync)).toHaveBeenCalledWith(
+      expect.stringContaining('instructions'),
+      { recursive: true },
+    );
+  });
+
+  it('skips copilot when null', () => {
+    const written = writeRefreshDocs({
+      copilotInstructions: null,
+      copilotInstructionFiles: null,
+    });
+    expect(written).toEqual([]);
+  });
 });

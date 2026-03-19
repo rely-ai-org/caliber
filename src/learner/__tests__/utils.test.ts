@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeBullet, hasTypePrefix, isSimilarLearning } from '../utils.js';
+import { normalizeBullet, hasTypePrefix, isSimilarLearning, extractScope } from '../utils.js';
 
 describe('normalizeBullet', () => {
   it('strips leading "- " prefix', () => {
@@ -43,6 +43,32 @@ describe('hasTypePrefix', () => {
 
   it('returns false for empty string', () => {
     expect(hasTypePrefix('')).toBe(false);
+  });
+});
+
+describe('extractScope', () => {
+  it('returns project for **[type:project]** prefix', () => {
+    expect(extractScope('- **[gotcha:project]** tsup swallows errors')).toBe('project');
+  });
+
+  it('returns personal for **[type:personal]** prefix', () => {
+    expect(extractScope('- **[correction:personal]** use bun not npm')).toBe('personal');
+  });
+
+  it('defaults to project when no scope suffix', () => {
+    expect(extractScope('- **[gotcha]** tsup swallows errors')).toBe('project');
+  });
+
+  it('defaults to project when no prefix at all', () => {
+    expect(extractScope('- use pnpm for installs')).toBe('project');
+  });
+
+  it('defaults to project for empty string', () => {
+    expect(extractScope('')).toBe('project');
+  });
+
+  it('handles prefix without leading dash', () => {
+    expect(extractScope('**[fix:personal]** always check types')).toBe('personal');
   });
 });
 

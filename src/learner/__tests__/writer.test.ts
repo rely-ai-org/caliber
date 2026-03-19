@@ -3,7 +3,8 @@ import fs from 'fs';
 
 vi.mock('fs');
 
-import { writeLearnedContent, readLearnedSection } from '../writer.js';
+import { writeLearnedContent, readLearnedSection, readPersonalLearnings } from '../writer.js';
+import { PERSONAL_LEARNINGS_FILE } from '../../constants.js';
 
 describe('writer', () => {
   beforeEach(() => {
@@ -205,6 +206,69 @@ describe('writer', () => {
 
       const skillPath = result.written.find(p => p.includes('learned-db-setup'));
       expect(skillPath).toBeDefined();
+    });
+  });
+
+  describe('personal learnings routing', () => {
+    it('routes :personal bullets to personal file', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const result = writeLearnedContent({
+        claudeMdLearnedSection: '- **[correction:personal]** use bun not npm',
+        skills: null,
+      });
+
+      expect(result.personalItemCount).toBe(1);
+      expect(result.newItemCount).toBe(0);
+      const calls = vi.mocked(fs.writeFileSync).mock.calls;
+      const personalCall = calls.find(c => String(c[0]).includes('personal-learnings.md'));
+      expect(personalCall).toBeDefined();
+      expect(String(personalCall![1])).toContain('use bun not npm');
+    });
+
+    it('routes :project bullets to CALIBER_LEARNINGS.md', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const result = writeLearnedContent({
+        claudeMdLearnedSection: '- **[gotcha:project]** tsup swallows errors',
+        skills: null,
+      });
+
+      expect(result.newItemCount).toBe(1);
+      expect(result.personalItemCount).toBe(0);
+      const calls = vi.mocked(fs.writeFileSync).mock.calls;
+      const projectCall = calls.find(c => String(c[0]) === 'CALIBER_LEARNINGS.md');
+      expect(projectCall).toBeDefined();
+    });
+
+    it('routes mixed batch correctly', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      const result = writeLearnedContent({
+        claudeMdLearnedSection: [
+          '- **[gotcha:project]** tsup swallows errors',
+          '- **[correction:personal]** use bun not npm',
+          '- **[pattern]** run tsc before build',
+        ].join('\n'),
+        skills: null,
+      });
+
+      expect(result.newItemCount).toBe(2); // project + unscoped (default project)
+      expect(result.personalItemCount).toBe(1);
+    });
+
+    it('sets 0600 permissions on personal file', () => {
+      vi.mocked(fs.existsSync).mockReturnValue(false);
+
+      writeLearnedContent({
+        claudeMdLearnedSection: '- **[correction:personal]** use bun not npm',
+        skills: null,
+      });
+
+      expect(vi.mocked(fs.chmodSync)).toHaveBeenCalledWith(
+        expect.stringContaining('personal-learnings.md'),
+        0o600,
+      );
     });
   });
 

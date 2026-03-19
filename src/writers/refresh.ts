@@ -7,6 +7,8 @@ interface RefreshDocs {
   cursorrules?: string | null;
   cursorRules?: Array<{ filename: string; content: string }> | null;
   claudeSkills?: Array<{ filename: string; content: string }> | null;
+  copilotInstructions?: string | null;
+  copilotInstructionFiles?: Array<{ filename: string; content: string }> | null;
 }
 
 export function writeRefreshDocs(docs: RefreshDocs): string[] {
@@ -43,6 +45,23 @@ export function writeRefreshDocs(docs: RefreshDocs): string[] {
     for (const skill of docs.claudeSkills) {
       const filePath = path.join(skillsDir, skill.filename);
       fs.writeFileSync(filePath, skill.content);
+      written.push(filePath);
+    }
+  }
+
+  if (docs.copilotInstructions) {
+    fs.mkdirSync('.github', { recursive: true });
+    const filePath = path.join('.github', 'copilot-instructions.md');
+    fs.writeFileSync(filePath, docs.copilotInstructions);
+    written.push(filePath);
+  }
+
+  if (docs.copilotInstructionFiles) {
+    const instructionsDir = path.join('.github', 'instructions');
+    fs.mkdirSync(instructionsDir, { recursive: true });
+    for (const file of docs.copilotInstructionFiles) {
+      const filePath = path.join(instructionsDir, file.filename);
+      fs.writeFileSync(filePath, file.content);
       written.push(filePath);
     }
   }

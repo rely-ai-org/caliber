@@ -10,7 +10,7 @@ import { loadConfig, getFastModel } from '../llm/config.js';
 import { trackSkillsInstalled } from '../telemetry/events.js';
 import { readState } from '../lib/state.js';
 
-type Platform = 'claude' | 'cursor' | 'codex';
+type Platform = 'claude' | 'cursor' | 'codex' | 'github-copilot';
 
 export interface SkillResult {
   name: string;
