@@ -12,10 +12,14 @@ function isInsideGitRepo(): boolean {
   }
 }
 
-export function getGitRemoteUrl(): string | undefined {
-  if (!isInsideGitRepo()) return undefined;
+export function getGitRemoteUrl(cwd?: string): string | undefined {
+  if (!cwd && !isInsideGitRepo()) return undefined;
   try {
-    return execSync('git remote get-url origin', { encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+    return execSync('git remote get-url origin', {
+      encoding: 'utf-8',
+      stdio: ['pipe', 'pipe', 'pipe'],
+      ...(cwd ? { cwd, timeout: 3000 } : {}),
+    }).trim();
   } catch {
     return undefined;
   }

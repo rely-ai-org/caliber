@@ -52,6 +52,11 @@ function printStatus() {
 // --- Interactive mode (default when running `caliber hooks`) ---
 
 export async function hooksCommand(options: { install?: boolean; remove?: boolean }) {
+  if (!options.install && !options.remove) {
+    console.log(chalk.dim('\n  Note: caliber now adds refresh instructions directly to config files.'));
+    console.log(chalk.dim('  These hooks are available for non-agent workflows (manual commits).\n'));
+  }
+
   if (options.install) {
     for (const hook of HOOKS) {
       const result = hook.install();

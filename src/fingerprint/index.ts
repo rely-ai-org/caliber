@@ -11,6 +11,8 @@ import { loadFingerprintCache, saveFingerprintCache } from './cache.js';
 
 export type { CodeAnalysis };
 
+export type { SourceSummary } from './sources.js';
+
 export interface Fingerprint {
   gitRemoteUrl?: string;
   packageName?: string;
@@ -21,6 +23,7 @@ export interface Fingerprint {
   existingConfigs: ReturnType<typeof readExistingConfigs>;
   codeAnalysis?: CodeAnalysis;
   description?: string;
+  sources?: import('./sources.js').SourceSummary[];
 }
 
 export async function collectFingerprint(dir: string): Promise<Fingerprint> {
@@ -55,7 +58,7 @@ export async function collectFingerprint(dir: string): Promise<Fingerprint> {
     codeAnalysis,
   };
 
-  await enrichWithLLM(fingerprint);
+  const workspaces = await enrichWithLLM(fingerprint);
 
   saveFingerprintCache(
     dir,
@@ -64,12 +67,13 @@ export async function collectFingerprint(dir: string): Promise<Fingerprint> {
     fingerprint.languages,
     fingerprint.frameworks,
     fingerprint.tools,
+    workspaces,
   );
 
   return fingerprint;
 }
 
-function readPackageName(dir: string): string | undefined {
+export function readPackageName(dir: string): string | undefined {
   try {
     const pkgPath = path.join(dir, 'package.json');
     if (!fs.existsSync(pkgPath)) return undefined;
@@ -89,11 +93,11 @@ export function computeFingerprintHash(fingerprint: Fingerprint): string {
   return crypto.createHash('sha256').update(key).digest('hex');
 }
 
-async function enrichWithLLM(fingerprint: Fingerprint): Promise<void> {
+async function enrichWithLLM(fingerprint: Fingerprint): Promise<string[]> {
   try {
     const config = loadConfig();
-    if (!config) return;
-    if (fingerprint.fileTree.length === 0) return;
+    if (!config) return [];
+    if (fingerprint.fileTree.length === 0) return [];
 
     const suffixCounts: Record<string, number> = {};
     for (const entry of fingerprint.fileTree) {
@@ -109,7 +113,9 @@ async function enrichWithLLM(fingerprint: Fingerprint): Promise<void> {
     if (result.languages?.length) fingerprint.languages = result.languages;
     if (result.frameworks?.length) fingerprint.frameworks = result.frameworks;
     if (result.tools?.length) fingerprint.tools = result.tools;
+
+    return result.workspaces ?? [];
   } catch {
-    // Silently continue — LLM enrichment is best-effort
+    return [];
   }
 }

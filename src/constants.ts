@@ -10,3 +10,5 @@ export const LEARNING_SESSION_FILE = 'current-session.jsonl';
 export const LEARNING_STATE_FILE = 'state.json';
 export const LEARNING_MAX_EVENTS = 500;
 export const LEARNING_ROI_FILE = 'roi-stats.json';
+export const PERSONAL_LEARNINGS_FILE = path.join(AUTH_DIR, 'personal-learnings.md');
+export const MIN_SESSIONS_FOR_COMPARISON = 3;

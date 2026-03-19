@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { getCursorPreCommitRule } from '../pre-commit-block.js';
 
 interface CursorConfig {
   cursorrules?: string;
@@ -16,15 +17,15 @@ export function writeCursorConfig(config: CursorConfig): string[] {
     written.push('.cursorrules');
   }
 
-  if (config.rules?.length) {
-    const rulesDir = path.join('.cursor', 'rules');
-    if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
+  const preCommitRule = getCursorPreCommitRule();
+  const allRules = [...(config.rules || []), preCommitRule];
+  const rulesDir = path.join('.cursor', 'rules');
+  if (!fs.existsSync(rulesDir)) fs.mkdirSync(rulesDir, { recursive: true });
 
-    for (const rule of config.rules) {
-      const rulePath = path.join(rulesDir, rule.filename);
-      fs.writeFileSync(rulePath, rule.content);
-      written.push(rulePath);
-    }
+  for (const rule of allRules) {
+    const rulePath = path.join(rulesDir, rule.filename);
+    fs.writeFileSync(rulePath, rule.content);
+    written.push(rulePath);
   }
 
   if (config.skills?.length) {

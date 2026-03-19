@@ -9,6 +9,7 @@ import {
   POINTS_LEARNED_CONTENT,
 } from '../constants.js';
 import { readFileOrNull } from '../utils.js';
+import { hasPreCommitBlock as checkPreCommitBlock } from '../../writers/pre-commit-block.js';
 
 function hasPreCommitHook(dir: string): boolean {
   try {
@@ -46,7 +47,13 @@ export function checkBonus(dir: string): Check[] {
     hookSources.push('git pre-commit');
   }
 
-  const hasHooks = hasClaudeHooks || hasPrecommit;
+  const claudeMd = readFileOrNull(join(dir, 'CLAUDE.md'));
+  const hasPreCommitBlock = claudeMd ? checkPreCommitBlock(claudeMd) : false;
+  if (hasPreCommitBlock) {
+    hookSources.push('config pre-commit instruction');
+  }
+
+  const hasHooks = hasClaudeHooks || hasPrecommit || hasPreCommitBlock;
   checks.push({
     id: 'hooks_configured',
     name: 'Hooks configured',
@@ -57,11 +64,11 @@ export function checkBonus(dir: string): Check[] {
     detail: hasHooks
       ? hookSources.join(', ')
       : 'No hooks configured',
-    suggestion: hasHooks ? undefined : 'Run `caliber hooks --install` for auto-refresh',
+    suggestion: hasHooks ? undefined : 'Run `caliber init` to add pre-commit instructions',
     fix: hasHooks ? undefined : {
       action: 'install_hooks',
       data: {},
-      instruction: 'Install caliber hooks for automatic config refresh on commits.',
+      instruction: 'Run caliber init to add pre-commit refresh instructions to config files.',
     },
   });
 

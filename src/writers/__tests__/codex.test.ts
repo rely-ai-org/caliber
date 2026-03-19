@@ -16,7 +16,9 @@ describe('writeCodexConfig', () => {
     const written = writeCodexConfig({ agentsMd: '# Project\n\nInstructions here.' });
 
     expect(written).toEqual(['AGENTS.md']);
-    expect(fs.writeFileSync).toHaveBeenCalledWith('AGENTS.md', '# Project\n\nInstructions here.');
+    const content = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+    expect(content).toContain('# Project\n\nInstructions here.');
+    expect(content).toContain('caliber:managed:pre-commit');
   });
 
   it('writes skills to .agents/skills/{name}/SKILL.md with frontmatter', () => {

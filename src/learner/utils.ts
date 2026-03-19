@@ -14,6 +14,15 @@ export function hasTypePrefix(bullet: string): boolean {
   return TYPE_PREFIX_RE.test(bullet.replace(/^- /, ''));
 }
 
+const SCOPE_RE = /^\*\*\[[^\]:]+:([^\]]+)\]\*\*/;
+
+export function extractScope(bullet: string): 'project' | 'personal' {
+  const clean = bullet.replace(/^- /, '');
+  const match = clean.match(SCOPE_RE);
+  if (match && match[1] === 'personal') return 'personal';
+  return 'project';
+}
+
 const SIMILARITY_THRESHOLD = 0.7;
 
 export function isSimilarLearning(a: string, b: string): boolean {

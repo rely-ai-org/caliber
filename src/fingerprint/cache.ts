@@ -16,6 +16,7 @@ interface FingerprintCache {
   languages: string[];
   frameworks: string[];
   tools: string[];
+  workspaces?: string[];
 }
 
 function getCachePath(dir: string): string {
@@ -62,6 +63,7 @@ export function loadFingerprintCache(dir: string, fileTree: string[]): {
   languages: string[];
   frameworks: string[];
   tools: string[];
+  workspaces?: string[];
 } | null {
   const cachePath = getCachePath(dir);
   try {
@@ -82,6 +84,7 @@ export function loadFingerprintCache(dir: string, fileTree: string[]): {
       languages: cache.languages,
       frameworks: cache.frameworks,
       tools: cache.tools,
+      workspaces: cache.workspaces,
     };
   } catch {
     return null;
@@ -95,6 +98,7 @@ export function saveFingerprintCache(
   languages: string[],
   frameworks: string[],
   tools: string[],
+  workspaces?: string[],
 ): void {
   const cachePath = getCachePath(dir);
   try {
@@ -111,10 +115,23 @@ export function saveFingerprintCache(
       languages,
       frameworks,
       tools,
+      workspaces,
     };
 
     fs.writeFileSync(cachePath, JSON.stringify(cache), 'utf-8');
   } catch {
     // Cache write failure is non-fatal
+  }
+}
+
+export function getDetectedWorkspaces(dir: string): string[] {
+  const cachePath = getCachePath(dir);
+  try {
+    if (!fs.existsSync(cachePath)) return [];
+    const raw = fs.readFileSync(cachePath, 'utf-8');
+    const cache = JSON.parse(raw) as FingerprintCache;
+    return cache.workspaces ?? [];
+  } catch {
+    return [];
   }
 }

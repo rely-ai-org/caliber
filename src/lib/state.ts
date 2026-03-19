@@ -8,14 +8,14 @@ const STATE_FILE = path.join(CALIBER_DIR, '.caliber-state.json');
 interface CaliberState {
   lastRefreshSha: string;
   lastRefreshTimestamp: string;
-  targetAgent?: ('claude' | 'cursor' | 'codex')[];
+  targetAgent?: ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
 }
 
-function normalizeTargetAgent(value: unknown): ('claude' | 'cursor' | 'codex')[] | undefined {
+function normalizeTargetAgent(value: unknown): ('claude' | 'cursor' | 'codex' | 'github-copilot')[] | undefined {
   if (Array.isArray(value)) return value;
   if (typeof value === 'string') {
     if (value === 'both') return ['claude', 'cursor'];
-    if (['claude', 'cursor', 'codex'].includes(value)) return [value as 'claude' | 'cursor' | 'codex'];
+    if (['claude', 'cursor', 'codex', 'github-copilot'].includes(value)) return [value as 'claude' | 'cursor' | 'codex' | 'github-copilot'];
   }
   return undefined;
 }

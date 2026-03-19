@@ -7,7 +7,7 @@ export function buildSkillContent(skill: { name: string; description: string; co
 
 export function collectSetupFiles(
   setup: Record<string, unknown>,
-  targetAgent?: ('claude' | 'cursor' | 'codex')[],
+  targetAgent?: ('claude' | 'cursor' | 'codex' | 'github-copilot')[],
 ): Array<{ path: string; content: string }> {
   const files: Array<{ path: string; content: string }> = [];
   const claude = setup.claude as Record<string, unknown> | undefined;
@@ -46,6 +46,17 @@ export function collectSetupFiles(
     if (Array.isArray(rules)) {
       for (const rule of rules) {
         files.push({ path: `.cursor/rules/${rule.filename}`, content: rule.content });
+      }
+    }
+  }
+
+  const copilot = setup.copilot as Record<string, unknown> | undefined;
+  if (copilot) {
+    if (copilot.instructions) files.push({ path: '.github/copilot-instructions.md', content: copilot.instructions as string });
+    const instructionFiles = copilot.instructionFiles as Array<{ filename: string; content: string }> | undefined;
+    if (Array.isArray(instructionFiles)) {
+      for (const file of instructionFiles) {
+        files.push({ path: `.github/instructions/${file.filename}`, content: file.content });
       }
     }
   }

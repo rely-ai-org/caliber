@@ -22,9 +22,9 @@ describe('writeCursorConfig — skills', () => {
 
     const written = writeCursorConfig(config);
 
-    expect(written).toHaveLength(2);
     expect(written).toContain(path.join('.cursor', 'skills', 'testing-guide', 'SKILL.md'));
     expect(written).toContain(path.join('.cursor', 'skills', 'deploy', 'SKILL.md'));
+    expect(written).toContain(path.join('.cursor', 'rules', 'caliber-pre-commit.mdc'));
 
     expect(fs.mkdirSync).toHaveBeenCalledWith(
       path.join('.cursor', 'skills', 'testing-guide'),
@@ -36,10 +36,10 @@ describe('writeCursorConfig — skills', () => {
     );
   });
 
-  it('returns empty array when no skills provided', () => {
+  it('writes pre-commit rule even when no skills provided', () => {
     const written = writeCursorConfig({});
-    expect(written).toHaveLength(0);
-    expect(fs.writeFileSync).not.toHaveBeenCalled();
+    expect(written).toHaveLength(1);
+    expect(written).toContain(path.join('.cursor', 'rules', 'caliber-pre-commit.mdc'));
   });
 
   it('writes both skills and legacy cursorrules when both are present', () => {
@@ -54,6 +54,7 @@ describe('writeCursorConfig — skills', () => {
 
     expect(written).toContain('.cursorrules');
     expect(written).toContain(path.join('.cursor', 'skills', 'my-skill', 'SKILL.md'));
-    expect(written).toHaveLength(2);
+    expect(written).toContain(path.join('.cursor', 'rules', 'caliber-pre-commit.mdc'));
+    expect(written).toHaveLength(3);
   });
 });

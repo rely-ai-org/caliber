@@ -8,6 +8,7 @@ import {
   areLearningHooksInstalled,
   areCursorLearningHooksInstalled,
 } from '../lib/learning-hooks.js';
+import { MIN_SESSIONS_FOR_COMPARISON } from '../constants.js';
 
 interface InsightsOptions {
   json?: boolean;
@@ -25,7 +26,10 @@ function buildInsightsData(stats: ROIStats) {
   const failureRateWithout = t.totalSessionsWithoutLearnings > 0
     ? t.totalFailuresWithoutLearnings / t.totalSessionsWithoutLearnings
     : null;
-  const failureRateImprovement = failureRateWith !== null && failureRateWithout !== null && failureRateWithout > 0
+  const hasSufficientCohorts =
+    t.totalSessionsWithLearnings >= MIN_SESSIONS_FOR_COMPARISON &&
+    t.totalSessionsWithoutLearnings >= MIN_SESSIONS_FOR_COMPARISON;
+  const failureRateImprovement = hasSufficientCohorts && failureRateWith !== null && failureRateWithout !== null && failureRateWithout > 0
     ? Math.round((1 - failureRateWith / failureRateWithout) * 100)
     : null;
 
@@ -90,6 +94,8 @@ function displayEarlyData(data: ReturnType<typeof buildInsightsData>, score: Sco
 
   if (data.failureRateImprovement !== null && data.failureRateImprovement > 0) {
     console.log(`  Failure rate trend:     ${chalk.green(`${data.failureRateImprovement}% fewer`)} failures with learnings ${chalk.dim('(early signal)')}`);
+  } else if (data.totalSessions > 0 && data.failureRateImprovement === null) {
+    console.log(`  Failure rate trend:     ${chalk.dim('collecting data (need 3+ sessions in each group)')}`);
   }
 
   if (data.taskSuccessRate !== null) {
@@ -120,6 +126,8 @@ function displayFullInsights(data: ReturnType<typeof buildInsightsData>, score: 
     console.log(`    Failure rate:         ${chalk.red(data.failureRateWithout.toFixed(1))}/session ${chalk.dim('\u2192')} ${chalk.green(data.failureRateWith.toFixed(1))}/session with learnings`);
     if (data.failureRateImprovement !== null && data.failureRateImprovement > 0) {
       console.log(`    Improvement:          ${chalk.green(`${data.failureRateImprovement}%`)} fewer failures`);
+    } else if (data.failureRateImprovement === null) {
+      console.log(`    Improvement:          ${chalk.dim('collecting data (need 3+ sessions in each group)')}`);
     }
   }
 

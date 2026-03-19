@@ -6,10 +6,11 @@ import { checkGrounding } from './checks/grounding.js';
 import { checkAccuracy } from './checks/accuracy.js';
 import { checkFreshness } from './checks/freshness.js';
 import { checkBonus } from './checks/bonus.js';
-import { computeGrade, CURSOR_ONLY_CHECKS, CLAUDE_ONLY_CHECKS, CODEX_ONLY_CHECKS, BOTH_ONLY_CHECKS, NON_CODEX_CHECKS } from './constants.js';
+import { checkSources } from './checks/sources.js';
+import { computeGrade, CURSOR_ONLY_CHECKS, CLAUDE_ONLY_CHECKS, CODEX_ONLY_CHECKS, COPILOT_ONLY_CHECKS, BOTH_ONLY_CHECKS, NON_CODEX_CHECKS } from './constants.js';
 import { getDismissedIds } from './dismissed.js';
 
-export type TargetAgent = ('claude' | 'cursor' | 'codex')[];
+export type TargetAgent = ('claude' | 'cursor' | 'codex' | 'github-copilot')[];
 export type CheckCategory = 'existence' | 'quality' | 'grounding' | 'accuracy' | 'freshness' | 'bonus';
 
 export interface CheckFix {
@@ -65,6 +66,7 @@ function filterChecksForTarget(checks: Check[], target: TargetAgent): Check[] {
     if (CLAUDE_ONLY_CHECKS.has(c.id)) return target.includes('claude');
     if (CURSOR_ONLY_CHECKS.has(c.id)) return target.includes('cursor');
     if (CODEX_ONLY_CHECKS.has(c.id)) return target.includes('codex');
+    if (COPILOT_ONLY_CHECKS.has(c.id)) return target.includes('github-copilot');
     if (BOTH_ONLY_CHECKS.has(c.id)) return target.includes('claude') && target.includes('cursor');
     if (NON_CODEX_CHECKS.has(c.id)) return !target.includes('codex');
     return true;
@@ -73,11 +75,12 @@ function filterChecksForTarget(checks: Check[], target: TargetAgent): Check[] {
 
 /** Auto-detect target agent from existing config files on disk. */
 export function detectTargetAgent(dir: string): TargetAgent {
-  const agents: ('claude' | 'cursor' | 'codex')[] = [];
+  const agents: ('claude' | 'cursor' | 'codex' | 'github-copilot')[] = [];
 
   if (existsSync(join(dir, 'CLAUDE.md')) || existsSync(join(dir, '.claude', 'skills'))) agents.push('claude');
   if (existsSync(join(dir, '.cursorrules')) || existsSync(join(dir, '.cursor', 'rules'))) agents.push('cursor');
   if (existsSync(join(dir, '.codex')) || existsSync(join(dir, '.agents', 'skills'))) agents.push('codex');
+  if (existsSync(join(dir, '.github', 'copilot-instructions.md'))) agents.push('github-copilot');
 
   return agents.length > 0 ? agents : ['claude'];
 }
@@ -99,6 +102,7 @@ export function computeLocalScore(dir: string, targetAgent?: TargetAgent): Score
     ...checkAccuracy(dir),
     ...checkFreshness(dir),
     ...checkBonus(dir),
+    ...checkSources(dir),
   ];
 
   const dismissed = getDismissedIds();

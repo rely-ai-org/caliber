@@ -1,11 +1,19 @@
 import fs from 'fs';
 import path from 'path';
-import { normalizeBullet, hasTypePrefix, isSimilarLearning } from './utils.js';
+import { normalizeBullet, hasTypePrefix, isSimilarLearning, extractScope } from './utils.js';
+import { AUTH_DIR, PERSONAL_LEARNINGS_FILE } from '../constants.js';
 
 const LEARNINGS_FILE = 'CALIBER_LEARNINGS.md';
 const LEARNINGS_HEADER = `# Caliber Learnings
 
 Accumulated patterns and anti-patterns from development sessions.
+Auto-managed by [caliber](https://github.com/rely-ai-org/caliber) — do not edit manually.
+
+`;
+
+const PERSONAL_LEARNINGS_HEADER = `# Personal Learnings
+
+Developer-specific patterns and preferences.
 Auto-managed by [caliber](https://github.com/rely-ai-org/caliber) — do not edit manually.
 
 `;
@@ -33,18 +41,35 @@ export interface WriteResult {
   written: string[];
   newItemCount: number;
   newItems: string[];
+  personalItemCount: number;
+  personalItems: string[];
 }
 
 export function writeLearnedContent(update: LearnedUpdate): WriteResult {
   const written: string[] = [];
   let newItemCount = 0;
   let newItems: string[] = [];
+  let personalItemCount = 0;
+  let personalItems: string[] = [];
 
   if (update.claudeMdLearnedSection) {
-    const result = writeLearnedSection(update.claudeMdLearnedSection);
-    newItemCount = result.newCount;
-    newItems = result.newItems;
-    written.push(LEARNINGS_FILE);
+    const bullets = parseBullets(update.claudeMdLearnedSection);
+    const projectBullets = bullets.filter(b => extractScope(b) === 'project');
+    const personalBullets = bullets.filter(b => extractScope(b) === 'personal');
+
+    if (projectBullets.length > 0) {
+      const result = writeLearnedSection(projectBullets.join('\n'));
+      newItemCount = result.newCount;
+      newItems = result.newItems;
+      written.push(LEARNINGS_FILE);
+    }
+
+    if (personalBullets.length > 0) {
+      const result = writePersonalLearnedSection(personalBullets.join('\n'));
+      personalItemCount = result.newCount;
+      personalItems = result.newItems;
+      written.push(PERSONAL_LEARNINGS_FILE);
+    }
   }
 
   if (update.skills?.length) {
@@ -54,7 +79,7 @@ export function writeLearnedContent(update: LearnedUpdate): WriteResult {
     }
   }
 
-  return { written, newItemCount, newItems };
+  return { written, newItemCount, newItems, personalItemCount, personalItems };
 }
 
 function parseBullets(content: string): string[] {
@@ -105,11 +130,21 @@ function deduplicateLearnedItems(
   return { merged: capped.join('\n'), newCount: newItems.length, newItems };
 }
 
-function writeLearnedSection(content: string): { newCount: number; newItems: string[] } {
-  const existingSection = readLearnedSection();
-  const { merged, newCount, newItems } = deduplicateLearnedItems(existingSection, content);
-  fs.writeFileSync(LEARNINGS_FILE, LEARNINGS_HEADER + merged + '\n');
+function writeLearnedSectionTo(
+  filePath: string,
+  header: string,
+  existing: string | null,
+  incoming: string,
+  mode?: number,
+): { newCount: number; newItems: string[] } {
+  const { merged, newCount, newItems } = deduplicateLearnedItems(existing, incoming);
+  fs.writeFileSync(filePath, header + merged + '\n');
+  if (mode) fs.chmodSync(filePath, mode);
   return { newCount, newItems };
+}
+
+function writeLearnedSection(content: string): { newCount: number; newItems: string[] } {
+  return writeLearnedSectionTo(LEARNINGS_FILE, LEARNINGS_HEADER, readLearnedSection(), content);
 }
 
 function writeLearnedSkill(skill: LearnedSkill): string {
@@ -133,6 +168,18 @@ function writeLearnedSkill(skill: LearnedSkill): string {
   }
 
   return skillPath;
+}
+
+function writePersonalLearnedSection(content: string): { newCount: number; newItems: string[] } {
+  if (!fs.existsSync(AUTH_DIR)) fs.mkdirSync(AUTH_DIR, { recursive: true });
+  return writeLearnedSectionTo(PERSONAL_LEARNINGS_FILE, PERSONAL_LEARNINGS_HEADER, readPersonalLearnings(), content, 0o600);
+}
+
+export function readPersonalLearnings(): string | null {
+  if (!fs.existsSync(PERSONAL_LEARNINGS_FILE)) return null;
+  const content = fs.readFileSync(PERSONAL_LEARNINGS_FILE, 'utf-8');
+  const bullets = content.split('\n').filter(l => l.startsWith('- ')).join('\n');
+  return bullets || null;
 }
 
 export function readLearnedSection(): string | null {

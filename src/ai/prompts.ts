@@ -1,6 +1,6 @@
 // ── Shared building blocks (not exported) ──────────────────────────────
 
-const ROLE_AND_CONTEXT = `You are an expert auditor for coding agent configurations (Claude Code, Cursor, and Codex).
+const ROLE_AND_CONTEXT = `You are an expert auditor for coding agent configurations (Claude Code, Cursor, Codex, and GitHub Copilot).
 
 Your job depends on context:
 - If no existing configs exist → generate an initial setup from scratch.
@@ -13,7 +13,9 @@ const CONFIG_FILE_TYPES = `You understand these config files:
 - .agents/skills/{name}/SKILL.md: Same OpenSkills format for Codex skills (Codex scans .agents/skills/ for skills).
 - .cursor/skills/{name}/SKILL.md: Same OpenSkills format for Cursor skills.
 - .cursorrules: Coding rules for Cursor (deprecated legacy format — do NOT generate this).
-- .cursor/rules/*.mdc: Modern Cursor rules with frontmatter (description, globs, alwaysApply).`;
+- .cursor/rules/*.mdc: Modern Cursor rules with frontmatter (description, globs, alwaysApply).
+- .github/copilot-instructions.md: Always-on repository-wide instructions for GitHub Copilot — same purpose as CLAUDE.md but for Copilot. Plain markdown, no frontmatter.
+- .github/instructions/*.instructions.md: Path-specific instruction files for GitHub Copilot with YAML frontmatter containing an \`applyTo\` glob pattern (e.g. \`applyTo: "**/*.ts,**/*.tsx"\`). Only loaded when Copilot is working on matching files.`;
 
 const EXCLUSIONS = `Do NOT generate .claude/settings.json, .claude/settings.local.json, or mcpServers — those are managed separately.`;
 
@@ -60,6 +62,7 @@ const SCORING_CRITERIA = `SCORING CRITERIA — your output is scored determinist
 Existence (25 pts):
 - CLAUDE.md exists (6 pts) — always generate for claude targets
 - AGENTS.md exists (6 pts) — always generate for codex target
+- copilot-instructions.md exists (6 pts) — always generate for github-copilot target
 - Skills configured (8 pts) — generate 3+ skills for full points
 - MCP servers referenced (3 pts) — mention detected MCP integrations in your config text
 - When cursor is targeted: Cursor rules exist (3+3 pts), cross-platform parity (2 pts)
@@ -115,7 +118,7 @@ ${OUTPUT_FORMAT}
 
 AgentSetup schema:
 {
-  "targetAgent": ["claude", "cursor", "codex"] (array of selected agents),
+  "targetAgent": ["claude", "cursor", "codex", "github-copilot"] (array of selected agents),
   "fileDescriptions": {
     "<file-path>": "reason for this change (max 80 chars)"
   },
@@ -133,6 +136,10 @@ AgentSetup schema:
   "cursor": {
     "skills": [{ "name": "string (kebab-case, matches directory name)", "description": "string (what this skill does and when to use it)", "content": "string (markdown body — NO frontmatter, it will be generated from name+description)" }],
     "rules": [{ "filename": "string.mdc", "content": "string (with frontmatter)" }]
+  },
+  "copilot": {
+    "instructions": "string (markdown content for .github/copilot-instructions.md — same quality/structure as CLAUDE.md)",
+    "instructionFiles": [{ "filename": "string.instructions.md", "content": "string (with applyTo YAML frontmatter, e.g. ---\\napplyTo: \\"**/*.ts,**/*.tsx\\"\\n---\\n\\nInstructions here)" }]
   }
 }
 
@@ -155,7 +162,7 @@ ${OUTPUT_FORMAT}
 
 CoreSetup schema:
 {
-  "targetAgent": ["claude", "cursor", "codex"] (array of selected agents),
+  "targetAgent": ["claude", "cursor", "codex", "github-copilot"] (array of selected agents),
   "fileDescriptions": {
     "<file-path>": "reason for this change (max 80 chars)"
   },
@@ -173,6 +180,10 @@ CoreSetup schema:
   "cursor": {
     "skillTopics": [{ "name": "string (kebab-case)", "description": "string" }],
     "rules": [{ "filename": "string.mdc", "content": "string (with frontmatter)" }]
+  },
+  "copilot": {
+    "instructions": "string (markdown content for .github/copilot-instructions.md — same quality/structure as CLAUDE.md)",
+    "instructionFiles": [{ "filename": "string.instructions.md", "content": "string (with applyTo YAML frontmatter)" }]
   }
 }
 
@@ -226,7 +237,7 @@ Description field formula: [What it does] + [When to use it with trigger phrases
 Return ONLY a JSON object:
 {"name": "string (kebab-case)", "description": "string (what + when + capabilities + negative triggers)", "content": "string (markdown body)"}`;
 
-export const REFINE_SYSTEM_PROMPT = `You are an expert at modifying coding agent configurations (Claude Code, Cursor, and Codex).
+export const REFINE_SYSTEM_PROMPT = `You are an expert at modifying coding agent configurations (Claude Code, Cursor, Codex, and GitHub Copilot).
 
 You will receive the current AgentSetup JSON and a user request describing what to change.
 
@@ -234,7 +245,7 @@ Apply the requested changes to the setup and return the complete updated AgentSe
 
 AgentSetup schema:
 {
-  "targetAgent": ["claude", "cursor", "codex"] (array of selected agents),
+  "targetAgent": ["claude", "cursor", "codex", "github-copilot"] (array of selected agents),
   "fileDescriptions": {
     "<file-path>": "reason for this change (max 80 chars)"
   },
@@ -252,6 +263,10 @@ AgentSetup schema:
   "cursor": {
     "skills": [{ "name": "string (kebab-case)", "description": "string", "content": "string (markdown body, no frontmatter)" }],
     "rules": [{ "filename": "string.mdc", "content": "string (with frontmatter)" }]
+  },
+  "copilot": {
+    "instructions": "string (markdown content for .github/copilot-instructions.md)",
+    "instructionFiles": [{ "filename": "string.instructions.md", "content": "string (with applyTo YAML frontmatter)" }]
   }
 }
 
@@ -298,7 +313,9 @@ Return a JSON object with this exact shape:
     "readmeMd": "<updated content or null>",
     "cursorrules": "<updated content or null>",
     "cursorRules": [{"filename": "name.mdc", "content": "..."}] or null,
-    "claudeSkills": [{"filename": "name.md", "content": "..."}] or null
+    "claudeSkills": [{"filename": "name.md", "content": "..."}] or null,
+    "copilotInstructions": "<updated content or null>",
+    "copilotInstructionFiles": [{"filename": "name.instructions.md", "content": "..."}] or null
   },
   "changesSummary": "<1-2 sentence summary of what was updated and why>",
   "docsUpdated": ["CLAUDE.md", "README.md"]
@@ -340,6 +357,12 @@ Each bullet MUST be prefixed with an observation type in bold brackets. Valid ty
 - **[pattern]** — a reusable approach that works in this project
 - **[env]** — an environment or configuration requirement
 - **[convention]** — a project-specific rule or naming convention
+
+Each type can optionally include a scope suffix to indicate whether the learning is project-specific or personal to the developer:
+- **[type:project]** — specific to this codebase (DEFAULT — use when in doubt)
+- **[type:personal]** — specific to the developer's workflow or personal preferences
+
+Use :personal ONLY for user corrections that are clearly personal preferences rather than project requirements. For example, "use bun not npm" is :personal if the project's lockfile doesn't enforce it. "Always run tsc before tsup" is :project because it's about the project's build process. When in doubt, default to :project (or omit the scope entirely, which means :project).
 
 Good examples:
 - "**[correction]** Files in \`src/generated/\` are auto-generated — never edit them directly"
@@ -389,6 +412,7 @@ Analyze the provided file tree and file extension distribution. Return a JSON ob
 - "languages": array of programming languages used, ordered by prominence in the project (most files first)
 - "frameworks": array of frameworks and key libraries detected, ordered by prominence
 - "tools": array of external tools, services, and platforms the project integrates with, ordered by prominence
+- "workspaces": array of relative paths to sub-projects, workspaces, or modules detected from workspace config files (e.g. pnpm-workspace.yaml, Cargo.toml [workspace], go.work, settings.gradle, BUILD files). Empty array if not a multi-project repo.
 
 Use the file extension distribution to determine the ordering — technologies with more files should appear first.
 

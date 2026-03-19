@@ -113,6 +113,24 @@ export function checkExistence(dir: string): Check[] {
     },
   });
 
+  // 2c. copilot-instructions.md exists
+  const copilotInstructionsExists = existsSync(join(dir, '.github', 'copilot-instructions.md'));
+  checks.push({
+    id: 'copilot_instructions_exists',
+    name: 'Copilot instructions exist',
+    category: 'existence',
+    maxPoints: POINTS_CLAUDE_MD_EXISTS,
+    earnedPoints: copilotInstructionsExists ? POINTS_CLAUDE_MD_EXISTS : 0,
+    passed: copilotInstructionsExists,
+    detail: copilotInstructionsExists ? 'Found at .github/copilot-instructions.md' : 'Not found',
+    suggestion: copilotInstructionsExists ? undefined : 'Create .github/copilot-instructions.md with project context for GitHub Copilot',
+    fix: copilotInstructionsExists ? undefined : {
+      action: 'create_file',
+      data: { file: '.github/copilot-instructions.md' },
+      instruction: 'Create .github/copilot-instructions.md with project context for GitHub Copilot.',
+    },
+  });
+
   // 3. Skills exist (.claude/skills/ or .agents/skills/)
   const claudeSkills = countFiles(join(dir, '.claude', 'skills'), /\.(md|SKILL\.md)$/);
   const codexSkills = countFiles(join(dir, '.agents', 'skills'), /SKILL\.md$/);

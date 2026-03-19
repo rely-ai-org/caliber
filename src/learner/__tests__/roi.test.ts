@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import {
@@ -112,31 +112,73 @@ describe('ROI stats', () => {
     expect(stats.sessions).toHaveLength(1);
   });
 
-  it('calculates savings as wasteTokens * sessions with learnings', () => {
+  it('calculates savings using honest failure rate comparison', () => {
     const learnings = [makeLearningEntry({ wasteTokens: 1000 })];
-    // Session that produced the learning (no learnings available yet)
-    recordSession(makeSession({ hadLearningsAvailable: false, newLearningsProduced: 1 }), learnings);
-    // 3 sessions that benefited from it
-    recordSession(makeSession({ sessionId: 's2', hadLearningsAvailable: true }));
-    recordSession(makeSession({ sessionId: 's3', hadLearningsAvailable: true }));
-    recordSession(makeSession({ sessionId: 's4', hadLearningsAvailable: true }));
+    // 3 sessions without learnings: 5 failures each = 15 total, rate = 5.0/session
+    recordSession(makeSession({ hadLearningsAvailable: false, failureCount: 5 }), learnings);
+    recordSession(makeSession({ sessionId: 's1b', hadLearningsAvailable: false, failureCount: 5 }));
+    recordSession(makeSession({ sessionId: 's1c', hadLearningsAvailable: false, failureCount: 5 }));
+    // 3 sessions with learnings: 1 failure each = 3 total, rate = 1.0/session
+    recordSession(makeSession({ sessionId: 's2', hadLearningsAvailable: true, failureCount: 1 }));
+    recordSession(makeSession({ sessionId: 's3', hadLearningsAvailable: true, failureCount: 1 }));
+    recordSession(makeSession({ sessionId: 's4', hadLearningsAvailable: true, failureCount: 1 }));
 
     const stats = readROIStats();
-    // 3 sessions with learnings available → savings = 1000 * 3
-    expect(stats.totals.estimatedSavingsTokens).toBe(1000 * 3);
+    // reduction = (5.0 - 1.0) / 5.0 = 0.8
+    // avgWaste = totalWasteTokens / 6 sessions = 1000/6 ≈ 166.67
+    // savings = 0.8 * 166.67 * 3 ≈ 400
+    expect(stats.totals.estimatedSavingsTokens).toBe(Math.round(0.8 * (1000 / 6) * 3));
   });
 
-  it('includes learning-producing sessions with learnings in savings', () => {
-    const learnings = [makeLearningEntry({ wasteTokens: 500 })];
-    recordSession(makeSession({ hadLearningsAvailable: false }), learnings);
-    // Session that had learnings AND produced new ones — still benefited from existing
-    recordSession(makeSession({ sessionId: 's2', hadLearningsAvailable: true, newLearningsProduced: 2 }));
-    // Session that only consumed
-    recordSession(makeSession({ sessionId: 's3', hadLearningsAvailable: true }));
+  it('returns zero savings when cohorts have fewer than 3 sessions', () => {
+    const learnings = [makeLearningEntry({ wasteTokens: 1000 })];
+    recordSession(makeSession({ hadLearningsAvailable: false, failureCount: 5 }), learnings);
+    recordSession(makeSession({ sessionId: 's2', hadLearningsAvailable: true, failureCount: 0 }));
 
     const stats = readROIStats();
-    // 2 sessions with learnings → savings = 500 * 2
-    expect(stats.totals.estimatedSavingsTokens).toBe(500 * 2);
+    // Only 1 session in each cohort — below minimum of 3
+    expect(stats.totals.estimatedSavingsTokens).toBe(0);
+  });
+
+  it('returns zero savings when failure rates are equal', () => {
+    // 3 without, 3 with — all same failure count
+    for (let i = 0; i < 3; i++) {
+      recordSession(makeSession({ sessionId: `wo-${i}`, hadLearningsAvailable: false, failureCount: 3 }));
+    }
+    for (let i = 0; i < 3; i++) {
+      recordSession(makeSession({ sessionId: `wi-${i}`, hadLearningsAvailable: true, failureCount: 3 }));
+    }
+
+    const stats = readROIStats();
+    expect(stats.totals.estimatedSavingsTokens).toBe(0);
+  });
+
+  it('returns zero savings when failure rate is worse with learnings', () => {
+    for (let i = 0; i < 3; i++) {
+      recordSession(makeSession({ sessionId: `wo-${i}`, hadLearningsAvailable: false, failureCount: 1 }));
+    }
+    for (let i = 0; i < 3; i++) {
+      recordSession(makeSession({ sessionId: `wi-${i}`, hadLearningsAvailable: true, failureCount: 5 }));
+    }
+
+    const stats = readROIStats();
+    expect(stats.totals.estimatedSavingsTokens).toBe(0);
+  });
+
+  it('recovers from corrupt roi-stats.json by renaming', () => {
+    if (!fs.existsSync(LEARNING_DIR)) fs.mkdirSync(LEARNING_DIR, { recursive: true });
+    fs.writeFileSync(ROI_FILE, '{corrupt json data');
+
+    const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stats = readROIStats();
+    consoleSpy.mockRestore();
+
+    expect(stats.learnings).toEqual([]);
+    expect(stats.sessions).toEqual([]);
+    expect(fs.existsSync(ROI_FILE + '.corrupt')).toBe(true);
+
+    // Clean up corrupt file
+    fs.unlinkSync(ROI_FILE + '.corrupt');
   });
 
   it('tracks first and last session timestamps', () => {
@@ -184,9 +226,6 @@ describe('formatROISummary', () => {
     expect(output).toContain('Failure rate (no learnings):   5.0/session');
     expect(output).toContain('Failure rate (with learnings): 1.5/session');
     expect(output).toContain('2,000 tokens');
-    expect(output).toContain('4,000 tokens');
-    expect(output).toContain('at least 1m');
-    expect(output).toContain('not counting human frustration');
   });
 
   it('omits failure rate section when no sessions of that type', () => {
