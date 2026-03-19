@@ -95,6 +95,7 @@ export async function analyzeEvents(
   existingClaudeMd?: string,
   existingLearnedSection?: string | null,
   existingSkills?: Array<{ filename: string; content: string }>,
+  personalLearnings?: string | null,
 ): Promise<AnalysisResult> {
   const fittedEvents = trimEventsToFit(events, MAX_PROMPT_TOKENS - 10_000);
   const eventsText = formatEventsForPrompt(fittedEvents);
@@ -112,6 +113,10 @@ export async function analyzeEvents(
   if (existingSkills?.length) {
     const skillsSummary = existingSkills.map(s => `- ${s.filename}: ${s.content.slice(0, 200)}`).join('\n');
     contextParts.push(`## Existing Skills\n\n${skillsSummary}`);
+  }
+
+  if (personalLearnings) {
+    contextParts.push(`## Personal Learnings (developer-specific, do NOT duplicate these)\n\n${personalLearnings}`);
   }
 
   contextParts.push(`## Task Segmentation & Attribution Instructions

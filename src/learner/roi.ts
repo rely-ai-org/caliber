@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { LEARNING_DIR, LEARNING_ROI_FILE } from '../constants.js';
+import { LEARNING_DIR, LEARNING_ROI_FILE, MIN_SESSIONS_FOR_COMPARISON } from '../constants.js';
 import { ensureLearningDir } from './storage.js';
 import { isSimilarLearning } from './utils.js';
 
@@ -11,6 +11,9 @@ export interface LearningCostEntry {
   wasteTokens: number;
   sourceEventCount: number;
   occurrences?: number;
+  activationCount?: number;
+  lastActivationTimestamp?: string | null;
+  explanation?: string | null;
 }
 
 export interface SessionROISummary {
@@ -73,6 +76,13 @@ export function readROIStats(): ROIStats {
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
   } catch {
+    try {
+      const corruptPath = filePath + '.corrupt';
+      fs.renameSync(filePath, corruptPath);
+      console.error(`caliber: roi-stats.json was corrupt — renamed to ${corruptPath}`);
+    } catch {
+      // Best effort — if rename fails, just continue with defaults
+    }
     return { learnings: [], sessions: [], totals: { ...DEFAULT_TOTALS } };
   }
 }
@@ -104,8 +114,27 @@ function recalculateTotals(stats: ROIStats): void {
     }
   }
 
-  totals.estimatedSavingsTokens = totals.totalWasteTokens * totals.totalSessionsWithLearnings;
-  totals.estimatedSavingsSeconds = totals.totalWasteSeconds * totals.totalSessionsWithLearnings;
+  if (
+    totals.totalSessionsWithLearnings >= MIN_SESSIONS_FOR_COMPARISON &&
+    totals.totalSessionsWithoutLearnings >= MIN_SESSIONS_FOR_COMPARISON
+  ) {
+    const rateWithout = totals.totalFailuresWithoutLearnings / totals.totalSessionsWithoutLearnings;
+    const rateWith = totals.totalFailuresWithLearnings / totals.totalSessionsWithLearnings;
+    if (rateWithout > 0 && rateWith < rateWithout) {
+      const reduction = (rateWithout - rateWith) / rateWithout;
+      const totalSessions = totals.totalSessionsWithLearnings + totals.totalSessionsWithoutLearnings;
+      const avgWastePerSession = totalSessions > 0 ? totals.totalWasteTokens / totalSessions : 0;
+      totals.estimatedSavingsTokens = Math.round(reduction * avgWastePerSession * totals.totalSessionsWithLearnings);
+      const avgWasteSecondsPerSession = totalSessions > 0 ? totals.totalWasteSeconds / totalSessions : 0;
+      totals.estimatedSavingsSeconds = Math.round(reduction * avgWasteSecondsPerSession * totals.totalSessionsWithLearnings);
+    } else {
+      totals.estimatedSavingsTokens = 0;
+      totals.estimatedSavingsSeconds = 0;
+    }
+  } else {
+    totals.estimatedSavingsTokens = 0;
+    totals.estimatedSavingsSeconds = 0;
+  }
 
   if (stats.sessions.length > 0) {
     totals.firstSessionTimestamp = stats.sessions[0].timestamp;

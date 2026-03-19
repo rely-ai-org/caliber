@@ -17,6 +17,8 @@ import {
   learnInstallCommand,
   learnRemoveCommand,
   learnStatusCommand,
+  learnListCommand,
+  learnDeleteCommand,
 } from './commands/learn.js';
 import { insightsCommand } from './commands/insights.js';
 import { setTelemetryDisabled } from './telemetry/config.js';
@@ -205,5 +207,16 @@ learn
   .command('status')
   .description('Show learning system status')
   .action(tracked('learn:status', learnStatusCommand));
+
+learn
+  .command('list')
+  .description('List all learnings with their source and activation data')
+  .option('--verbose', 'Show explanations and activation counts')
+  .action(tracked('learn:list', (opts: { verbose?: boolean }) => learnListCommand(opts)));
+
+learn
+  .command('delete <index>')
+  .description('Delete a learning by its index number (from `caliber learn list`)')
+  .action(tracked('learn:delete', (index: string) => learnDeleteCommand(index)));
 
 export { program };

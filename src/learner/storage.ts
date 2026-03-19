@@ -64,32 +64,30 @@ function truncateResponse(response: Record<string, unknown>): Record<string, unk
   return { _truncated: str.slice(0, MAX_RESPONSE_LENGTH) };
 }
 
+function trimSessionFileIfNeeded(filePath: string): void {
+  const state = readState();
+  if (state.eventCount + 1 > LEARNING_MAX_EVENTS) {
+    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
+    if (lines.length > LEARNING_MAX_EVENTS) {
+      const kept = lines.slice(lines.length - LEARNING_MAX_EVENTS);
+      fs.writeFileSync(filePath, kept.join('\n') + '\n');
+    }
+  }
+}
+
 export function appendEvent(event: ToolEvent): void {
   ensureLearningDir();
   const truncated = { ...event, tool_response: truncateResponse(event.tool_response) };
   const filePath = sessionFilePath();
-
   fs.appendFileSync(filePath, JSON.stringify(truncated) + '\n');
-
-  const count = getEventCount();
-  if (count > LEARNING_MAX_EVENTS) {
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
-    const kept = lines.slice(lines.length - LEARNING_MAX_EVENTS);
-    fs.writeFileSync(filePath, kept.join('\n') + '\n');
-  }
+  trimSessionFileIfNeeded(filePath);
 }
 
 export function appendPromptEvent(event: PromptEvent): void {
   ensureLearningDir();
   const filePath = sessionFilePath();
   fs.appendFileSync(filePath, JSON.stringify(event) + '\n');
-
-  const count = getEventCount();
-  if (count > LEARNING_MAX_EVENTS) {
-    const lines = fs.readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
-    const kept = lines.slice(lines.length - LEARNING_MAX_EVENTS);
-    fs.writeFileSync(filePath, kept.join('\n') + '\n');
-  }
+  trimSessionFileIfNeeded(filePath);
 }
 
 export function readAllEvents(): SessionEvent[] {

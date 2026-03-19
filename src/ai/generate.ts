@@ -590,6 +590,10 @@ export function buildGeneratePrompt(
     }
   }
 
+  if (existing.personalLearnings) {
+    parts.push(`\n--- Personal Learnings (developer-specific, include in generated configs) ---\n${existing.personalLearnings}`);
+  }
+
   const allDeps = extractAllDeps(process.cwd());
   if (allDeps.length > 0) {
     parts.push(`\nProject dependencies (${allDeps.length}):`);

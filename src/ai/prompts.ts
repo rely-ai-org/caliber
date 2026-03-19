@@ -358,6 +358,12 @@ Each bullet MUST be prefixed with an observation type in bold brackets. Valid ty
 - **[env]** — an environment or configuration requirement
 - **[convention]** — a project-specific rule or naming convention
 
+Each type can optionally include a scope suffix to indicate whether the learning is project-specific or personal to the developer:
+- **[type:project]** — specific to this codebase (DEFAULT — use when in doubt)
+- **[type:personal]** — specific to the developer's workflow or personal preferences
+
+Use :personal ONLY for user corrections that are clearly personal preferences rather than project requirements. For example, "use bun not npm" is :personal if the project's lockfile doesn't enforce it. "Always run tsc before tsup" is :project because it's about the project's build process. When in doubt, default to :project (or omit the scope entirely, which means :project).
+
 Good examples:
 - "**[correction]** Files in \`src/generated/\` are auto-generated — never edit them directly"
 - "**[correction]** Use \`pnpm\` not \`npm\` — the lockfile is pnpm-lock.yaml and npm creates conflicts"

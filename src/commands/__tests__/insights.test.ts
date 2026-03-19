@@ -169,6 +169,56 @@ describe('insights command', () => {
     expect(parsed.tier).toBe('cold-start');
   });
 
+  it('does not show improvement when cohorts have fewer than 3 sessions', async () => {
+    // 1 without, 1 with — below threshold
+    const stats = makeStats(2);
+    mockReadROIStats.mockReturnValue(stats);
+
+    await insightsCommand({});
+
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+    expect(output).not.toMatch(/\d+% fewer/);
+    expect(output).toContain('collecting data');
+  });
+
+  it('shows improvement when cohorts have 3+ sessions each', async () => {
+    // Custom stats: 3 without (high failures), 3 with (low failures)
+    const stats: ROIStats = {
+      sessions: [
+        ...Array.from({ length: 3 }, (_, i) => ({
+          timestamp: `2026-01-0${i + 1}T00:00:00Z`, sessionId: `wo${i}`,
+          eventCount: 50, failureCount: 6, promptCount: 2, wasteSeconds: 30,
+          hadLearningsAvailable: false, learningsCount: 0, newLearningsProduced: 0,
+        })),
+        ...Array.from({ length: 3 }, (_, i) => ({
+          timestamp: `2026-02-0${i + 1}T00:00:00Z`, sessionId: `wi${i}`,
+          eventCount: 50, failureCount: 1, promptCount: 2, wasteSeconds: 10,
+          hadLearningsAvailable: true, learningsCount: 5, newLearningsProduced: 0,
+        })),
+      ],
+      learnings: [{ timestamp: '2026-01-01T00:00:00Z', observationType: 'pattern', summary: 'l1', wasteTokens: 100, sourceEventCount: 50 }],
+      totals: {
+        ...makeEmptyTotals(),
+        totalSessionsWithLearnings: 3,
+        totalSessionsWithoutLearnings: 3,
+        totalFailuresWithLearnings: 3,
+        totalFailuresWithoutLearnings: 18,
+        totalWasteTokens: 100,
+        totalWasteSeconds: 120,
+        estimatedSavingsTokens: 0,
+        estimatedSavingsSeconds: 0,
+      },
+    };
+    mockReadROIStats.mockReturnValue(stats);
+
+    await insightsCommand({});
+
+    const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
+    // 18/3 = 6.0 without, 3/3 = 1.0 with → (1 - 1/6) * 100 = 83%
+    expect(output).toContain('83%');
+    expect(output).toContain('fewer failures');
+  });
+
   it('shows task metrics when available in full mode', async () => {
     mockReadROIStats.mockReturnValue(makeStats(25, { withTasks: true }));
 

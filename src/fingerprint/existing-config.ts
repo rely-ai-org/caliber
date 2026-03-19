@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { PERSONAL_LEARNINGS_FILE } from '../constants.js';
 
 export function readExistingConfigs(dir: string) {
   const configs: {
@@ -13,6 +14,7 @@ export function readExistingConfigs(dir: string) {
     cursorSkills?: Array<{ name: string; filename: string; content: string }>;
     claudeMcpServers?: Record<string, unknown>;
     cursorMcpServers?: Record<string, unknown>;
+    personalLearnings?: string;
   } = {};
 
   // README.md
@@ -126,6 +128,17 @@ export function readExistingConfigs(dir: string) {
       }
     } catch {
       // ignore
+    }
+  }
+
+  // Personal learnings (~/.caliber/personal-learnings.md)
+  if (fs.existsSync(PERSONAL_LEARNINGS_FILE)) {
+    try {
+      const content = fs.readFileSync(PERSONAL_LEARNINGS_FILE, 'utf-8');
+      const bullets = content.split('\n').filter(l => l.startsWith('- ')).join('\n');
+      if (bullets) configs.personalLearnings = bullets;
+    } catch {
+      // ignore — personal learnings are optional
     }
   }
 
