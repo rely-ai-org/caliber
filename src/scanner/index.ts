@@ -72,7 +72,9 @@ export function scanLocalState(dir: string): LocalItem[] {
           });
         }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      process.stderr.write(`Warning: ${mcpJsonPath} could not be parsed (${err instanceof Error ? err.message : String(err)}) — skipping MCP scan\n`);
+    }
   }
 
   // Codex: AGENTS.md (when used as primary instructions)
@@ -103,7 +105,9 @@ export function scanLocalState(dir: string): LocalItem[] {
           });
         }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      process.stderr.write(`Warning: ${codexSkillsDir} could not be read (${err instanceof Error ? err.message : String(err)}) — skipping Codex skills scan\n`);
+    }
   }
 
   // Cursor: .cursorrules
@@ -149,7 +153,9 @@ export function scanLocalState(dir: string): LocalItem[] {
           });
         }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      process.stderr.write(`Warning: ${cursorSkillsDir} could not be read (${err instanceof Error ? err.message : String(err)}) — skipping Cursor skills scan\n`);
+    }
   }
 
   // Cursor: .cursor/mcp.json mcpServers
@@ -168,7 +174,9 @@ export function scanLocalState(dir: string): LocalItem[] {
           });
         }
       }
-    } catch { /* ignore */ }
+    } catch (err) {
+      process.stderr.write(`Warning: ${cursorMcpPath} could not be parsed (${err instanceof Error ? err.message : String(err)}) — skipping Cursor MCP scan\n`);
+    }
   }
 
   return items;
