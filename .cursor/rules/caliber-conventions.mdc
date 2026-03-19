@@ -12,3 +12,5 @@ alwaysApply: true
 - Never commit API keys or credentials
 - Key deps: commander, chalk, ora, diff, glob, tsup, @inquirer/confirm, @inquirer/select, @inquirer/checkbox
 - LLM calls go through `src/llm/index.ts` (`llmCall`, `llmJsonCall`) — never import provider SDKs directly
+- All commands in `src/commands/` must be registered in `src/cli.ts` wrapped with `tracked()`
+- Backups written to `.caliber/backups/` · manifest at `.caliber/manifest.json`

@@ -3,12 +3,14 @@ description: Vitest testing patterns — LLM mocks, coverage config, test file s
 globs: src/**/__tests__/*.test.ts,src/test/**
 alwaysApply: false
 ---
-- All LLM calls globally mocked via `src/test/setup.ts` — no real API calls
+- All LLM calls globally mocked via `src/test/setup.ts` — no real API calls in tests
 - Override per-test: `vi.spyOn(llm, 'llmCall').mockResolvedValue('...')`
 - Coverage excludes: `src/test/`, `src/bin.ts`, `src/cli.ts`, `src/commands/**`, `dist/**`
-- Scoring checks are pure functions — test with temp dirs or mocked fs
+- Scoring checks (`src/scoring/checks/`) are pure functions — test with temp dirs or mocked fs
 - LLM utils (`extractJson`, `estimateTokens`) are pure — no mocking needed
-- Fingerprint tests: mock `fs` and `child_process.execSync`
-- Learner tests: use temp directories from `os.tmpdir()`
+- Fingerprint tests (`src/fingerprint/__tests__/`): mock `fs` and `child_process.execSync`
+- Learner tests (`src/learner/__tests__/`): use temp directories from `os.tmpdir()`
 - Use `memfs` for filesystem mocking when needed
 - Run single file: `npx vitest run src/scoring/__tests__/accuracy.test.ts`
+- Spawn mock return values must include `stderr: { on: vi.fn() }` when stdio is `['pipe', 'pipe', 'pipe']`
+- Tests for `src/llm/__tests__/index.test.ts` must call `vi.unmock('../index.js')` and `resetProvider()` in beforeEach

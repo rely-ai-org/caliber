@@ -1,0 +1,6 @@
+---
+description: Run caliber refresh before git commits to keep docs in sync
+alwaysApply: true
+---
+Before creating git commits, run `caliber refresh` to update docs based on code changes,
+then stage modified doc files (CLAUDE.md .claude/ .cursor/ .github/copilot-instructions.md AGENTS.md CALIBER_LEARNINGS.md).

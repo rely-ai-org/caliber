@@ -1,67 +1,131 @@
-# Adding a New CLI Command
+---
+name: adding-a-command
+description: Creates a new CLI command following caliber's pattern: file in src/commands/, export async function, register in src/cli.ts with tracked(), use ora spinners, throw __exit__ on user-facing failures. Use when user says 'add command', 'new subcommand', 'create CLI action', or adds files to src/commands/. Do NOT use for modifying existing commands.
+---
+# Adding a Command
 
 ## Critical
 
-- **Imports**: Use `.js` extension for all relative imports (e.g. `'../llm/config.js'`).
-- **Registration**: Every command must be wrapped with `tracked('commandName', handler)` in `src/cli.ts` so telemetry runs.
-- **Clean exit**: For user-facing failures (e.g. no config, validation), call `throw new Error('__exit__')` so no stack trace is printed.
-- **Spinner on error**: In a `catch` block, call `spinner.fail(chalk.red(...))` before rethrowing or throwing `__exit__`.
+1. **Every command MUST be wrapped with `tracked()`** in `src/cli.ts`. This enables telemetry. Verify the command exports are named exports before registering.
+2. **User-facing errors MUST throw `__exit__`** (not Error). This prevents stack traces. Example: `throw __exit__("Project not initialized. Run: caliber init")`.
+3. **All long-running operations MUST use `ora` spinners**. Never skip spinner.start() / spinner.succeed() / spinner.fail(). See `src/commands/init.ts` for exact pattern.
+4. **Commands MUST match the existing file structure**: `src/commands/COMMAND_NAME.ts` with `export async function COMMAND_NAME(options: ...)`. No default exports.
 
 ## Instructions
 
-### 1. Create the command file
+1. **Create the command file** at `src/commands/COMMAND_NAME.ts` with this boilerplate:
+   ```typescript
+   import ora from 'ora';
+   import { __exit__ } from '../lib/exit.js';
+   
+   export async function COMMAND_NAME(options: {
+     // Define options matching Command builder pattern
+   }): Promise<void> {
+     const spinner = ora();
+     
+     try {
+       spinner.start('Performing action...');
+       // Implementation
+       spinner.succeed('Action completed');
+     } catch (error) {
+       spinner.fail('Action failed');
+       if (error instanceof Error && error.message.includes('specific')) {
+         throw __exit__('User-friendly message');
+       }
+       throw error;
+     }
+   }
+   ```
+   Verify: File created at correct path, function is async, options parameter defined, returns Promise<void>.
 
-Create `src/commands/<kebab-name>.ts`. Export a single async function named `<camelName>Command`. Accept an options object typed from the flags you will add in Step 2.
+2. **Register the command in `src/cli.ts`**:
+   - Import: `import { COMMAND_NAME } from './commands/COMMAND_NAME.js';`
+   - Add command builder using Commander.js pattern (see `status`, `init`, `score` commands in file):
+   ```typescript
+   program
+     .command('command-name')
+     .description('Brief description')
+     .option('-f, --flag <value>', 'Flag description')
+     .action(tracked(async (options) => {
+       await COMMAND_NAME(options);
+     }));
+   ```
+   Verify: Import is present, command is wrapped with `tracked()`, options passed to function match.
 
-- Import: `chalk`, `ora`; for LLM: `loadConfig` (and optionally `getFastModel`) from `../llm/config.js`; for calls: `llmCall` / `llmJsonCall` from `../llm/index.js`. Use `.js` in paths.
-- If the command needs an LLM provider: at the start, `const config = loadConfig(); if (!config) { console.log(chalk.red('No LLM provider configured. Run `caliber config` or set ANTHROPIC_API_KEY.')); throw new Error('__exit__'); }`
-- For async work, use `const spinner = ora('Message...').start();` then in `try` use `spinner.succeed(...)` / `spinner.warn(...)`; in `catch` use `spinner.fail(chalk.red(err instanceof Error ? err.message : '...'));` then rethrow or `throw new Error('__exit__')`.
+3. **Add tests in `src/commands/__tests__/COMMAND_NAME.test.ts`**:
+   - Use Vitest pattern from existing tests (e.g., `init.test.ts`).
+   - Mock `ora` using: `vi.mock('ora', () => ({ default: vi.fn(() => mockSpinner) }))`.
+   - Test success path and error cases (including `__exit__` throws).
+   Verify: Test file created, mocks are in place, success and failure cases covered.
 
-**Verify**: File path is `src/commands/<name>.ts`, export name ends with `Command`, and imports use `.js` extensions.
-
-### 2. Register in CLI
-
-In `src/cli.ts`:
-
-- Add: `import { <camelName>Command } from './commands/<kebab-name>.js';`
-- Add: `program.command('<name>').description('...').option('--flag', 'Description').action(tracked('<name>', <camelName>Command));`
-- For subcommands (e.g. `learn finalize`): create a parent with `program.command('parent', { hidden: true })` then `parent.command('child').action(tracked('parent:child', handler));`
-
-**Verify**: `npm run build` succeeds and `node dist/bin.js <name> --help` shows the command and options.
-
-### 3. Use the LLM layer (if needed)
-
-- Use `llmCall` for plain text or `llmJsonCall<YourType>()` for JSON. Both are in `src/llm/index.js`. Never import provider SDKs directly.
-- Optional fast model: `const fastModel = getFastModel();` and pass `...(fastModel ? { model: fastModel } : {})` into the call options.
-- See the `llm-provider` skill for streaming and provider details.
-
-**Verify**: When config is missing, the command exits with your chalk message and no stack trace (__exit__).
-
-### 4. Add a test
-
-Create `src/commands/__tests__/<kebab-name>.test.ts`. Use `describe`/`it`/`expect`/`vi` from vitest. `llmCall`/`llmJsonCall`/`getProvider` are globally mocked in `src/test/setup.ts`. Mock only what the command under test needs (e.g. `vi.mock('../../scanner/index.js')`). Test at least: success path and the __exit__ path when config is missing (if applicable).
-
-**Verify**: `npm run test -- src/commands/__tests__/<name>.test.ts` passes.
-
-### 5. Docs and commit
-
-Add a row to the Commands table in `README.md` if user-facing. Commit: `feat: add <name> command` (or `feat(commands): ...`).
+4. **Validate types** with `npx tsc --noEmit` and run tests with `npm run test`.
+   Verify: No TypeScript errors, all tests passing.
 
 ## Examples
 
-**User says**: "Add a `greet` command that says hello and optionally calls the LLM."
+**User says:** "Add a 'validate' command that checks if the project is initialized and reports status."
 
-**Actions**: (1) Create `src/commands/greet.ts` with `export async function greetCommand(options: { llm?: boolean })`, chalk + ora; if `options.llm` then `loadConfig()` and if !config throw __exit__ and show message, else `llmCall({ system: '...', prompt: 'Say hello.' })` and print result. (2) In `src/cli.ts`: import `greetCommand`, add `program.command('greet').option('--llm', 'Use LLM').action(tracked('greet', greetCommand));`. (3) Add `src/commands/__tests__/greet.test.ts` with test for no-llm output and test that when config is missing and `--llm` is used, command throws `__exit__`.
+**Actions taken:**
+1. Create `src/commands/validate.ts`:
+   ```typescript
+   import ora from 'ora';
+   import { __exit__ } from '../lib/exit.js';
+   import { loadManifest } from '../writers/manifest.js';
+   
+   export async function validate(): Promise<void> {
+     const spinner = ora();
+     try {
+       spinner.start('Validating project...');
+       const manifest = await loadManifest();
+       if (!manifest) {
+         throw __exit__('No .caliber/manifest.json found. Run: caliber init');
+       }
+       spinner.succeed(`Project valid. Found ${Object.keys(manifest.rules || {}).length} rules.`);
+     } catch (error) {
+       spinner.fail('Validation failed');
+       throw error;
+     }
+   }
+   ```
 
-**Result**: `caliber greet` and `caliber greet --llm` work; help shows the option; tests pass.
+2. Register in `src/cli.ts`:
+   ```typescript
+   import { validate } from './commands/validate.js';
+   
+   program
+     .command('validate')
+     .description('Validate the project configuration')
+     .action(tracked(async () => {
+       await validate();
+     }));
+   ```
+
+3. Add test in `src/commands/__tests__/validate.test.ts` mocking `loadManifest` and `ora`.
+
+**Result:** Command runs as `caliber validate`, shows spinner, throws __exit__ on missing manifest, tests pass.
 
 ## Common Issues
 
-| Issue | Fix |
-|-------|-----|
-| Command not listed in `caliber --help` | Ensure `program.command('name').action(tracked('name', handler))` is in `src/cli.ts` and the handler is the same function you export from the command file. |
-| Options undefined in handler | Commander passes options as first argument. Define an interface (e.g. `RefreshOptions { quiet?: boolean }`) and use it as the parameter type; options match `.option('--quiet', '...')` as `quiet: boolean`. |
-| Stack trace on validation failure | Use `throw new Error('__exit__')` after printing the message; the CLI catches it and exits without a trace. |
-| `Cannot find module '../llm/config.js'` | You must use the `.js` extension in imports from `.ts` files (ESM resolution in this project). |
-| Tests fail with "getProvider is not a function" or real LLM call | Ensure the test file is under `src/**/*.test.ts` so `src/test/setup.ts` runs and mocks `../llm/index.js`. For tests in `src/commands/__tests__/`, the global mock applies to code under `src/commands/` that imports from `../llm/index.js`. |
-| Spinner keeps running after error | In every `catch` block that rethrows, call `spinner.fail(chalk.red(...))` before `throw err` or `throw new Error('__exit__')`. |
+**Error: "Cannot find module './commands/COMMAND_NAME.js'"**
+- **Fix:** Verify file is at `src/commands/COMMAND_NAME.ts` (exact spelling and case). Check import path in `src/cli.ts` includes `.js` extension (TS gets compiled to JS).
+
+**Error: "Spinner is not defined" or "ora is not exported"**
+- **Fix:** Ensure `import ora from 'ora'` is at top of file. Verify line: `const spinner = ora();` before calling `spinner.start()`.
+
+**Error: "tracked is not a function"**
+- **Fix:** In `src/cli.ts`, verify import: `import { tracked } from '../telemetry/tracked.js'`. Command must be wrapped: `.action(tracked(async (options) => { ... }))`.
+
+**Error: "__exit__ is not exported"**
+- **Fix:** Verify import in command file: `import { __exit__ } from '../lib/exit.js'`. Throw like: `throw __exit__("message")`, not `throw new Error(__exit__(...))`.
+
+**Spinner shows wrong status after multiple operations**
+- **Fix:** Create new spinner instance for each step: `spinner = ora()` before each `.start()`. Don't reuse across try/catch boundaries.
+
+**Tests fail with "ora is not mocked"**
+- **Fix:** Add to test file:
+  ```typescript
+  vi.mock('ora', () => ({
+    default: vi.fn(() => ({ start: vi.fn(), succeed: vi.fn(), fail: vi.fn() })),
+  }));
+  ```
+  before importing the command function.

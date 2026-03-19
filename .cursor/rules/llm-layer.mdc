@@ -5,10 +5,12 @@ alwaysApply: false
 ---
 - All LLM calls go through `src/llm/index.ts` — never import @anthropic-ai/sdk, openai, or @anthropic-ai/vertex-sdk directly
 - `llmCall()` returns plain text; `llmJsonCall<T>()` returns parsed+typed JSON
-- Both auto-retry on transient errors with exponential backoff
-- Provider resolution: ANTHROPIC_API_KEY → VERTEX_PROJECT_ID → OPENAI_API_KEY → Cursor ACP → Claude CLI → config file
-- Each provider implements `LLMProvider` interface from `src/llm/types.ts`
-- For streaming: use `provider.stream()` with onText/onComplete/onError callbacks
-- JSON parsing: `extractJson()` for bracket-balancing, `parseJsonResponse()` for full pipeline
-- `CALIBER_MODEL` env var overrides model for any provider
-- google-auth-library handles ADC for Vertex AI authentication
+- Both auto-retry on transient errors via `TRANSIENT_ERRORS` array with exponential backoff (`1000 * Math.pow(2, attempt - 1)`)
+- Provider resolution: `ANTHROPIC_API_KEY` → `VERTEX_PROJECT_ID` → `OPENAI_API_KEY` → `CALIBER_USE_CURSOR_SEAT` → `CALIBER_USE_CLAUDE_CLI` → config file
+- Each provider implements `LLMProvider` interface from `src/llm/types.ts`: `call()` + `stream()` + optional `listModels()`
+- For streaming: `getProvider()` then `provider.stream(options, { onText, onEnd, onError })` — `onEnd` receives optional `meta?: { stopReason?, usage? }`
+- JSON parsing: `extractJson()` for bracket-balancing, `parseJsonResponse()` for full pipeline — never raw `JSON.parse()` on LLM output
+- Fast model: `getFastModel()` from `src/llm/config.ts` — spread `...(fastModel ? { model: fastModel } : {})` into call options
+- Use `parseSeatBasedError()` from `src/llm/seat-based-errors.ts` for both Cursor and Claude CLI error parsing
+- Seat-based providers (`cursor`, `claude-cli`) need `stdio: ['pipe', 'pipe', 'pipe']` in spawn — never `inherit` for stderr
+- Call `validateModel()` before long/streaming work in `init`, `regenerate`, `learn`, `refresh`
