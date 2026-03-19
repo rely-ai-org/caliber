@@ -15,6 +15,7 @@ import { validateModel } from '../llm/index.js';
 import { trackRefreshCompleted } from '../telemetry/events.js';
 import { resolveAllSources } from '../fingerprint/sources.js';
 import { getDetectedWorkspaces } from '../fingerprint/cache.js';
+import { ensureBuiltinSkills } from '../lib/builtin-skills.js';
 
 interface RefreshOptions {
   quiet?: boolean;
@@ -118,6 +119,11 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
 
   if (response.changesSummary) {
     log(quiet, chalk.dim(`\n  ${response.changesSummary}`));
+  }
+
+  const builtinWritten = ensureBuiltinSkills();
+  for (const file of builtinWritten) {
+    log(quiet, `  ${chalk.green('✓')} ${file} ${chalk.dim('(built-in)')}`);
   }
 
   if (currentSha) {

@@ -372,9 +372,140 @@ export async function searchSkills(
 
 export { interactiveSelect as selectSkills, installSkills };
 
+// --- Query-based search (for agent/CLI use) ---
+
+export async function querySkills(query: string): Promise<void> {
+  const terms = query.split(/[\s,]+/).filter(Boolean);
+  if (terms.length === 0) {
+    console.log(chalk.yellow('Please provide search terms.'));
+    throw new Error('__exit__');
+  }
+
+  const platforms = detectLocalPlatforms();
+  const installedSkills = getInstalledSkills(platforms);
+  const primaryPlatform = platforms.includes('claude') ? 'claude' : platforms[0];
+
+  const searchSpinner = ora('Searching skill registries...').start();
+  const allCandidates = await searchAllProviders(terms, primaryPlatform);
+
+  if (!allCandidates.length) {
+    searchSpinner.succeed('No skills found matching your query.');
+    return;
+  }
+
+  const newCandidates = allCandidates.filter(c => !installedSkills.has(c.slug.toLowerCase()));
+  if (!newCandidates.length) {
+    searchSpinner.succeed('All matching skills are already installed.');
+    return;
+  }
+  searchSpinner.succeed(`Found ${newCandidates.length} candidates`);
+
+  let results: SkillResult[];
+  const config = loadConfig();
+
+  if (config) {
+    const scoreSpinner = ora('Scoring relevance...').start();
+    try {
+      const queryContext = `User is looking for skills related to: ${query}`;
+      results = await scoreWithLLM(newCandidates, queryContext, terms);
+      if (results.length === 0) {
+        scoreSpinner.succeed('No highly relevant skills found.');
+        return;
+      }
+      scoreSpinner.succeed(`${results.length} relevant`);
+    } catch {
+      results = newCandidates.slice(0, 5);
+    }
+  } else {
+    results = newCandidates.slice(0, 5);
+  }
+
+  const top = results.slice(0, 5);
+
+  // Verify content is available
+  const fetchSpinner = ora('Verifying availability...').start();
+  const contentMap = new Map<string, string>();
+  await Promise.all(top.map(async (rec) => {
+    const content = await fetchSkillContent(rec);
+    if (content) contentMap.set(rec.slug, content);
+  }));
+  const available = top.filter(r => contentMap.has(r.slug));
+  fetchSpinner.succeed(`${available.length} available`);
+
+  if (!available.length) {
+    console.log(chalk.dim('  No installable skills found.\n'));
+    return;
+  }
+
+  // Output structured results for agent consumption
+  console.log('');
+  for (let i = 0; i < available.length; i++) {
+    const r = available[i];
+    const scoreStr = r.score > 0 ? ` (score: ${r.score})` : '';
+    console.log(`  ${i + 1}. ${r.slug}${scoreStr}`);
+    console.log(`     ${r.reason || r.name}`);
+  }
+  console.log('');
+  console.log(chalk.dim(`  Install with: caliber skills --install ${available.map(r => r.slug).join(',')}`));
+  console.log('');
+}
+
+// --- Install by slug (non-interactive) ---
+
+export async function installBySlug(slugStr: string): Promise<void> {
+  const slugs = slugStr.split(',').map(s => s.trim()).filter(Boolean);
+  if (slugs.length === 0) {
+    console.log(chalk.yellow('Please provide skill slugs to install.'));
+    throw new Error('__exit__');
+  }
+
+  const platforms = detectLocalPlatforms();
+
+  const spinner = ora(`Fetching ${slugs.length} skill${slugs.length > 1 ? 's' : ''}...`).start();
+
+  // Search for each slug to get source URLs
+  const allResults = await searchAllProviders(slugs);
+  const matched: SkillResult[] = [];
+  for (const slug of slugs) {
+    const match = allResults.find(r => r.slug.toLowerCase() === slug.toLowerCase());
+    if (match) matched.push(match);
+  }
+
+  if (!matched.length) {
+    spinner.fail('No matching skills found in the registry.');
+    return;
+  }
+
+  // Fetch content
+  const contentMap = new Map<string, string>();
+  await Promise.all(matched.map(async (rec) => {
+    const content = await fetchSkillContent(rec);
+    if (content) contentMap.set(rec.slug, content);
+  }));
+
+  const installable = matched.filter(r => contentMap.has(r.slug));
+  if (!installable.length) {
+    spinner.fail('Could not fetch skill content.');
+    return;
+  }
+
+  spinner.succeed(`Fetched ${installable.length} skill${installable.length > 1 ? 's' : ''}`);
+  await installSkills(installable, platforms, contentMap);
+}
+
 // --- Main command ---
 
-export async function recommendCommand() {
+export async function recommendCommand(options: { query?: string; install?: string }) {
+  if (options.install) {
+    await installBySlug(options.install);
+    return;
+  }
+
+  if (options.query) {
+    await querySkills(options.query);
+    return;
+  }
+
   const proceed = await select({
     message: 'Search public repos for relevant skills to add to this project?',
     choices: [

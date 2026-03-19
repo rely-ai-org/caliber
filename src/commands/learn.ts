@@ -14,7 +14,7 @@ import {
   releaseFinalizeLock,
 } from '../learner/storage.js';
 import type { ToolEvent, PromptEvent } from '../learner/storage.js';
-import { writeLearnedContent, readLearnedSection, readPersonalLearnings, migrateInlineLearnings } from '../learner/writer.js';
+import { writeLearnedContent, readLearnedSection, readPersonalLearnings, migrateInlineLearnings, addLearning } from '../learner/writer.js';
 import { sanitizeSecrets } from '../lib/sanitize.js';
 import { writeFinalizeSummary } from '../lib/notifications.js';
 import {
@@ -589,4 +589,20 @@ export async function learnDeleteCommand(indexStr: string) {
   }
 
   console.log(chalk.green('✓') + ` Removed: ${bulletToRemove.replace(/^- /, '').slice(0, 80)}`);
+}
+
+export async function learnAddCommand(content: string, options: { personal?: boolean }) {
+  if (!content.trim()) {
+    console.log(chalk.yellow('Please provide learning content.'));
+    throw new Error('__exit__');
+  }
+
+  const scope = options.personal ? 'personal' : 'project';
+  const result = addLearning(content.trim(), scope);
+
+  if (result.added) {
+    console.log(chalk.green('✓') + ` Learning saved to ${result.file}`);
+  } else {
+    console.log(chalk.dim('  Similar learning already exists — skipped.'));
+  }
 }

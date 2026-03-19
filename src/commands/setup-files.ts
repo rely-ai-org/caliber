@@ -1,9 +1,7 @@
 import fs from 'fs';
+import { BUILTIN_SKILLS, buildSkillContent } from '../lib/builtin-skills.js';
 
-export function buildSkillContent(skill: { name: string; description: string; content: string }): string {
-  const frontmatter = `---\nname: ${skill.name}\ndescription: ${skill.description}\n---\n\n`;
-  return frontmatter + skill.content;
-}
+export { buildSkillContent };
 
 export function collectSetupFiles(
   setup: Record<string, unknown>,
@@ -22,6 +20,9 @@ export function collectSetupFiles(
         files.push({ path: `.claude/skills/${skill.name}/SKILL.md`, content: buildSkillContent(skill) });
       }
     }
+    for (const builtin of BUILTIN_SKILLS) {
+      files.push({ path: `.claude/skills/${builtin.name}/SKILL.md`, content: buildSkillContent(builtin) });
+    }
   }
 
   if (codex) {
@@ -32,6 +33,9 @@ export function collectSetupFiles(
         files.push({ path: `.agents/skills/${skill.name}/SKILL.md`, content: buildSkillContent(skill) });
       }
     }
+    for (const builtin of BUILTIN_SKILLS) {
+      files.push({ path: `.agents/skills/${builtin.name}/SKILL.md`, content: buildSkillContent(builtin) });
+    }
   }
 
   if (cursor) {
@@ -41,6 +45,9 @@ export function collectSetupFiles(
       for (const skill of cursorSkills) {
         files.push({ path: `.cursor/skills/${skill.name}/SKILL.md`, content: buildSkillContent(skill) });
       }
+    }
+    for (const builtin of BUILTIN_SKILLS) {
+      files.push({ path: `.cursor/skills/${builtin.name}/SKILL.md`, content: buildSkillContent(builtin) });
     }
     const rules = cursor.rules as Array<{ filename: string; content: string }> | undefined;
     if (Array.isArray(rules)) {

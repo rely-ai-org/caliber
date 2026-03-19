@@ -19,6 +19,7 @@ import {
   learnStatusCommand,
   learnListCommand,
   learnDeleteCommand,
+  learnAddCommand,
 } from './commands/learn.js';
 import { insightsCommand } from './commands/insights.js';
 import { sourcesListCommand, sourcesAddCommand, sourcesRemoveCommand } from './commands/sources.js';
@@ -144,6 +145,8 @@ program
 program
   .command('skills')
   .description('Discover and install community skills for your project')
+  .option('--query <terms>', 'Search for skills by topic (e.g. "react frontend")')
+  .option('--install <slugs>', 'Install specific skills by slug (comma-separated)')
   .action(tracked('skills', recommendCommand));
 
 program
@@ -247,5 +250,11 @@ learn
   .command('delete <index>')
   .description('Delete a learning by its index number (from `caliber learn list`)')
   .action(tracked('learn:delete', (index: string) => learnDeleteCommand(index)));
+
+learn
+  .command('add <content>')
+  .description('Add a learning directly (used by agent skills)')
+  .option('--personal', 'Save as a personal learning instead of project-level')
+  .action(tracked('learn:add', learnAddCommand));
 
 export { program };

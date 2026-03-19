@@ -175,6 +175,18 @@ function writePersonalLearnedSection(content: string): { newCount: number; newIt
   return writeLearnedSectionTo(PERSONAL_LEARNINGS_FILE, PERSONAL_LEARNINGS_HEADER, readPersonalLearnings(), content, 0o600);
 }
 
+export function addLearning(bullet: string, scope: 'project' | 'personal' = 'project'): { file: string; added: boolean } {
+  const formatted = bullet.startsWith('- ') ? bullet : `- ${bullet}`;
+
+  if (scope === 'personal') {
+    const result = writePersonalLearnedSection(formatted);
+    return { file: PERSONAL_LEARNINGS_FILE, added: result.newCount > 0 };
+  }
+
+  const result = writeLearnedSection(formatted);
+  return { file: LEARNINGS_FILE, added: result.newCount > 0 };
+}
+
 export function readPersonalLearnings(): string | null {
   if (!fs.existsSync(PERSONAL_LEARNINGS_FILE)) return null;
   const content = fs.readFileSync(PERSONAL_LEARNINGS_FILE, 'utf-8');
