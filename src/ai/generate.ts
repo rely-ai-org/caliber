@@ -4,6 +4,7 @@ import { getFastModel, getMaxPromptTokens } from '../llm/config.js';
 import { estimateTokens } from '../llm/utils.js';
 import { CORE_GENERATION_PROMPT, GENERATION_SYSTEM_PROMPT, SKILL_GENERATION_PROMPT } from './prompts.js';
 import { extractAllDeps } from '../utils/dependencies.js';
+import { formatSourcesForPrompt } from '../fingerprint/sources.js';
 
 type TargetAgent = ('claude' | 'cursor' | 'codex')[];
 
@@ -214,6 +215,13 @@ function buildSkillContext(fingerprint: Fingerprint, setup: Record<string, unkno
 
   if (allDeps.length > 0) {
     parts.push(`\nDependencies: ${allDeps.join(', ')}`);
+  }
+
+  if (fingerprint.sources?.length) {
+    parts.push('\nRelated Sources:');
+    for (const s of fingerprint.sources) {
+      parts.push(`- ${s.name} (${s.role}): ${s.description || 'related project'}`);
+    }
   }
 
   return parts.join('\n');
@@ -643,6 +651,11 @@ export function buildGeneratePrompt(
 
     parts.push(header);
     parts.push(codeLines.join('\n'));
+  }
+
+  // Source context (separate mini-budget — never competes with code analysis)
+  if (fingerprint.sources?.length) {
+    parts.push(formatSourcesForPrompt(fingerprint.sources));
   }
 
   return parts.join('\n');

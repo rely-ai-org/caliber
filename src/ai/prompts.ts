@@ -389,6 +389,7 @@ Analyze the provided file tree and file extension distribution. Return a JSON ob
 - "languages": array of programming languages used, ordered by prominence in the project (most files first)
 - "frameworks": array of frameworks and key libraries detected, ordered by prominence
 - "tools": array of external tools, services, and platforms the project integrates with, ordered by prominence
+- "workspaces": array of relative paths to sub-projects, workspaces, or modules detected from workspace config files (e.g. pnpm-workspace.yaml, Cargo.toml [workspace], go.work, settings.gradle, BUILD files). Empty array if not a multi-project repo.
 
 Use the file extension distribution to determine the ordering — technologies with more files should appear first.
 

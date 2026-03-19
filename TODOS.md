@@ -21,6 +21,33 @@
 **Effort:** S (human: ~2 hrs / CC: ~10 min)
 **Depends on:** First-run vs re-run awareness feature.
 
+## P2: Org-level context directory
+**What:** `~/.caliber/org/` directory with markdown files that get injected into every project's generation prompt as org-wide standards.
+**Why:** Teams have org-wide rules (commit style, PR process, testing standards) that should appear in every repo's config without per-repo configuration. Currently requires each repo to list an org-standards repo as a source or manually add rules to every CLAUDE.md.
+**Pros:** Zero per-repo config for org-wide conventions. Team leads set rules once.
+**Cons:** Distribution problem — how do rules reach 20 developers' machines? Needs design thinking about sync mechanisms (git submodule? caliber org sync? shared config repo?).
+**Context:** Deferred from multi-source CEO review (Proposal 7). Per-repo sources ship first to learn how teams actually share context. Design the org-level flow informed by real usage patterns. See CEO plan: `~/.gstack/projects/rely-ai-org-caliber/ceo-plans/2026-03-19-multi-source-context.md`.
+**Effort:** M (human: ~1 week / CC: ~1 hour)
+**Depends on:** Multi-source Phase 1 shipped and validated.
+
+## P3: Bidirectional source awareness
+**What:** When repo A lists repo B as a source, surface repo B's constraints and conventions in repo A's config automatically (e.g., "never call UserService.delete() without audit logging").
+**Why:** Currently sources are one-directional. B's rules don't propagate to A, so cross-repo constraint violations go undetected.
+**Pros:** Catches cross-repo constraint violations. True team-level awareness.
+**Cons:** Creates dependency chains and staleness risk. Transitive dependencies (A→B→C) add complexity.
+**Context:** Requires `caliber publish` to include constraint/convention data in `summary.json`. Needs design for staleness detection and circular dependency handling. Deferred from multi-source CEO review.
+**Effort:** L (human: ~2 weeks / CC: ~3 hours)
+**Depends on:** Multi-source Phase 1 + `caliber publish` shipped.
+
+## P2: Remote URL source type
+**What:** Implement the `url` source type in `.caliber/sources.json` — fetch a URL (webpage, raw markdown, API docs), extract text, summarize via LLM, inject as source context.
+**Why:** The sources schema supports `type: "url"` from day 1 but Phase 1 only implements `repo` and `file`. Teams with standards in Notion, Confluence, or internal wikis can't use sources until this ships.
+**Pros:** Covers the "context lives outside git" use case. Makes sources truly universal.
+**Cons:** URL fetching introduces network dependencies, auth challenges (private wikis), content extraction complexity.
+**Context:** The `fetchSkillContent` pattern in `src/commands/recommend.ts` is reusable. Cache aggressively — URLs don't change often. Deferred from multi-source CEO review.
+**Effort:** M (human: ~1 week / CC: ~1 hour)
+**Depends on:** Multi-source Phase 1 shipped.
+
 ## P3: Windows CI test runner
 **What:** Add a Windows GitHub Actions runner to test seat-based providers on Windows.
 **Why:** Windows shell escaping in claude-cli.ts and cursor-acp.ts is untested.

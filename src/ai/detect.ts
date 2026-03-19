@@ -6,6 +6,7 @@ interface DetectResult {
   languages: string[];
   frameworks: string[];
   tools: string[];
+  workspaces: string[];
 }
 
 export async function detectProjectStack(
@@ -40,5 +41,6 @@ export async function detectProjectStack(
     languages: Array.isArray(result.languages) ? result.languages : [],
     frameworks: Array.isArray(result.frameworks) ? result.frameworks : [],
     tools: Array.isArray(result.tools) ? result.tools : [],
+    workspaces: Array.isArray(result.workspaces) ? result.workspaces : [],
   };
 }

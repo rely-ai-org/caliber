@@ -19,6 +19,8 @@ import {
   learnStatusCommand,
 } from './commands/learn.js';
 import { insightsCommand } from './commands/insights.js';
+import { sourcesListCommand, sourcesAddCommand, sourcesRemoveCommand } from './commands/sources.js';
+import { publishCommand } from './commands/publish.js';
 import { setTelemetryDisabled } from './telemetry/config.js';
 import { initTelemetry, trackEvent } from './telemetry/index.js';
 import { checkPendingNotifications } from './lib/notifications.js';
@@ -104,6 +106,7 @@ program
   .command('init')
   .description('Initialize your project for AI-assisted development')
   .option('--agent <type>', 'Target agents (comma-separated): claude, cursor, codex', parseAgentOption)
+  .option('--source <paths...>', 'Related source paths to include as context')
   .option('--dry-run', 'Preview changes without writing files')
   .option('--force', 'Overwrite existing setup without prompting')
   .option('--debug-report', undefined, false)
@@ -169,6 +172,32 @@ program
   .description('Show agent performance insights and learning impact')
   .option('--json', 'Output as JSON')
   .action(tracked('insights', insightsCommand));
+
+const sources = program
+  .command('sources')
+  .description('Manage external context sources (related repos, docs)');
+
+sources
+  .command('list')
+  .description('Show configured and auto-detected sources')
+  .action(tracked('sources:list', sourcesListCommand));
+
+sources
+  .command('add')
+  .description('Add an external source')
+  .argument('<path>', 'Path to repo directory or file')
+  .action(tracked('sources:add', sourcesAddCommand));
+
+sources
+  .command('remove')
+  .description('Remove a configured source')
+  .argument('<name>', 'Source path or role to remove')
+  .action(tracked('sources:remove', sourcesRemoveCommand));
+
+program
+  .command('publish')
+  .description('Generate a machine-readable summary for other repos to consume')
+  .action(tracked('publish', publishCommand));
 
 // [In Development] Session learning — not yet ready for public use.
 // The command is functional but hidden from help output.

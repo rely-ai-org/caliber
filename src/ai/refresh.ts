@@ -1,6 +1,8 @@
 import { llmCall, parseJsonResponse } from '../llm/index.js';
 import { getFastModel } from '../llm/config.js';
 import { REFRESH_SYSTEM_PROMPT } from './prompts.js';
+import type { SourceSummary } from '../fingerprint/sources.js';
+import { formatSourcesForPrompt } from '../fingerprint/sources.js';
 
 interface RefreshDiff {
   committed: string;
@@ -42,8 +44,9 @@ export async function refreshDocs(
   existingDocs: ExistingDocs,
   projectContext: ProjectContext,
   learnedSection?: string | null,
+  sources?: SourceSummary[],
 ): Promise<RefreshResponse> {
-  const prompt = buildRefreshPrompt(diff, existingDocs, projectContext, learnedSection);
+  const prompt = buildRefreshPrompt(diff, existingDocs, projectContext, learnedSection, sources);
   const fastModel = getFastModel();
 
   const raw = await llmCall({
@@ -61,6 +64,7 @@ function buildRefreshPrompt(
   existingDocs: ExistingDocs,
   projectContext: ProjectContext,
   learnedSection?: string | null,
+  sources?: SourceSummary[],
 ): string {
   const parts: string[] = [];
 
@@ -117,6 +121,10 @@ function buildRefreshPrompt(
     parts.push('\n--- Learned Patterns (from session learning) ---');
     parts.push('Consider these accumulated learnings when deciding what to update:');
     parts.push(learnedSection);
+  }
+
+  if (sources?.length) {
+    parts.push(formatSourcesForPrompt(sources));
   }
 
   return parts.join('\n');

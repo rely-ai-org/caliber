@@ -57,11 +57,15 @@ export const POINTS_FRESHNESS = 4;
 export const POINTS_NO_SECRETS = 4;
 export const POINTS_PERMISSIONS = 2;
 
-// ── Bonus checks (5 pts) ────────────────────────────────────────────
+// ── Bonus checks (5 pts + conditional source pts) ───────────────────
 export const POINTS_HOOKS = 2;
 export const POINTS_AGENTS_MD = 1;
 export const POINTS_OPEN_SKILLS_FORMAT = 2;
 export const POINTS_LEARNED_CONTENT = 2;
+
+// ── Source checks (conditional — only counted when sources are configured) ──
+export const POINTS_SOURCES_CONFIGURED = 3;
+export const POINTS_SOURCES_REFERENCED = 3;
 
 // ── Thresholds ─────────────────────────────────────────────────────────
 

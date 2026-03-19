@@ -2,6 +2,8 @@ import path from 'path';
 import chalk from 'chalk';
 import fs from 'fs';
 import { collectFingerprint, type Fingerprint } from '../fingerprint/index.js';
+import { resolveAllSources } from '../fingerprint/sources.js';
+import { getDetectedWorkspaces } from '../fingerprint/cache.js';
 import { generateSetup, generateSkillsForSetup } from '../ai/generate.js';
 import { writeSetup, undoSetup } from '../writers/index.js';
 import { stageFiles, cleanupStaging } from '../writers/staging.js';
@@ -48,6 +50,7 @@ export type { TargetAgent };
 
 interface InitOptions {
   agent?: TargetAgent;
+  source?: string[];
   dryRun?: boolean;
   force?: boolean;
   debugReport?: boolean;
@@ -242,6 +245,15 @@ export async function initCommand(options: InitOptions) {
 
     trackInitProjectDiscovered(fingerprint.languages.length, fingerprint.frameworks.length, fingerprint.fileTree.length);
     log(options.verbose, `Fingerprint: ${fingerprint.languages.length} languages, ${fingerprint.frameworks.length} frameworks, ${fingerprint.fileTree.length} files`);
+
+    // Resolve external sources
+    const cliSources = options.source || [];
+    const workspaces = getDetectedWorkspaces(process.cwd());
+    const sources = resolveAllSources(process.cwd(), cliSources, workspaces);
+    if (sources.length > 0) {
+      fingerprint.sources = sources;
+      log(options.verbose, `Sources: ${sources.length} resolved (${sources.map(s => s.name).join(', ')})`);
+    }
 
     if (report) {
       report.addJson('Fingerprint: Git', { remote: fingerprint.gitRemoteUrl, packageName: fingerprint.packageName });

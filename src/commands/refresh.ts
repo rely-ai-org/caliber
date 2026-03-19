@@ -13,6 +13,8 @@ import { readLearnedSection } from '../learner/writer.js';
 import { loadConfig } from '../llm/config.js';
 import { validateModel } from '../llm/index.js';
 import { trackRefreshCompleted } from '../telemetry/events.js';
+import { resolveAllSources } from '../fingerprint/sources.js';
+import { getDetectedWorkspaces } from '../fingerprint/cache.js';
 
 interface RefreshOptions {
   quiet?: boolean;
@@ -69,6 +71,10 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
     packageName: fingerprint.packageName,
   };
 
+  // Resolve sources for context
+  const workspaces = getDetectedWorkspaces(repoDir);
+  const sources = resolveAllSources(repoDir, [], workspaces);
+
   const response = await refreshDocs(
     {
       committed: diff.committedDiff,
@@ -80,6 +86,7 @@ async function refreshSingleRepo(repoDir: string, options: RefreshOptions & { la
     existingDocs,
     projectContext,
     learnedSection,
+    sources.length > 0 ? sources : undefined,
   );
 
   if (!response.docsUpdated || response.docsUpdated.length === 0) {
