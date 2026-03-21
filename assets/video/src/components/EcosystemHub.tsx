@@ -4,7 +4,7 @@ import { theme } from "./theme";
 import { ClaudeIcon, CursorIcon, CodexIcon, CopilotIcon } from "./ToolIcons";
 
 const editors = [
-  { name: "Claude Code", Icon: ClaudeIcon, color: "#d4a574", angle: -40 },
+  { name: "Claude Code", Icon: ClaudeIcon, color: "#D97757", angle: -40 },
   { name: "Cursor", Icon: CursorIcon, color: "#7dd3fc", angle: 40 },
   { name: "Codex", Icon: CodexIcon, color: "#86efac", angle: 150 },
   { name: "Copilot", Icon: CopilotIcon, color: "#c4b5fd", angle: 210 },

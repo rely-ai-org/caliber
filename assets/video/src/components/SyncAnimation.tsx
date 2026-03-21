@@ -1,9 +1,9 @@
 import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
 import { theme } from "./theme";
-import { ClaudeIcon, CursorIcon, CodexIcon, CopilotIcon } from "./ToolIcons";
+import { ClaudeIcon, CursorIcon, CodexIcon, CopilotIcon, GitHubIcon } from "./ToolIcons";
 
 const outputFiles = [
-  { name: "CLAUDE.md", platform: "Claude Code", Icon: ClaudeIcon, color: "#d4a574" },
+  { name: "CLAUDE.md", platform: "Claude Code", Icon: ClaudeIcon, color: "#D97757" },
   { name: ".cursor/rules/", platform: "Cursor", Icon: CursorIcon, color: "#7dd3fc" },
   { name: "AGENTS.md", platform: "Codex", Icon: CodexIcon, color: "#86efac" },
   { name: "copilot-instructions.md", platform: "Copilot", Icon: CopilotIcon, color: "#c4b5fd" },
@@ -23,7 +23,6 @@ export const SyncAnimation: React.FC = () => {
   const loopPulse = Math.sin(((frame % 30) / 30) * Math.PI * 2);
   const loopOpacity = interpolate(frame, [70, 88], [0, 1], { extrapolateRight: "clamp" });
 
-  // Rotating refresh arrow
   const arrowRotation = interpolate(frame, [38, 120], [0, 360], { extrapolateRight: "clamp" });
 
   return (
@@ -34,20 +33,29 @@ export const SyncAnimation: React.FC = () => {
         background: `radial-gradient(ellipse 50% 40% at 30% 50%, ${theme.green}06, transparent)`,
       }}
     >
-      {/* Section label */}
+      {/* Section label with GitHub icon */}
       <div
         style={{
           position: "absolute",
           top: "6%",
-          fontSize: 22,
-          fontFamily: theme.fontMono,
-          color: theme.textMuted,
-          textTransform: "uppercase",
-          letterSpacing: "0.15em",
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
           opacity: headerOpacity,
         }}
       >
-        Continuous Sync
+        <GitHubIcon size={22} color={theme.textMuted} />
+        <span
+          style={{
+            fontSize: 22,
+            fontFamily: theme.fontMono,
+            color: theme.textMuted,
+            textTransform: "uppercase",
+            letterSpacing: "0.15em",
+          }}
+        >
+          Syncs against your Git
+        </span>
       </div>
 
       {/* Headline */}
@@ -67,7 +75,7 @@ export const SyncAnimation: React.FC = () => {
       </div>
 
       <div style={{ display: "flex", alignItems: "center", gap: 44, marginTop: 24 }}>
-        {/* Terminal-style diff card */}
+        {/* Terminal-style diff card with GitHub icon in header */}
         <div
           style={{
             backgroundColor: theme.surface,
@@ -80,7 +88,7 @@ export const SyncAnimation: React.FC = () => {
             boxShadow: theme.terminalGlow,
           }}
         >
-          {/* Terminal header */}
+          {/* Terminal header with GitHub icon */}
           <div
             style={{
               display: "flex",
@@ -94,9 +102,12 @@ export const SyncAnimation: React.FC = () => {
             <div style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.red }} />
             <div style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.yellow }} />
             <div style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: theme.green }} />
-            <span style={{ color: theme.textMuted, fontSize: 14, fontFamily: theme.fontMono, marginLeft: 10 }}>
-              git diff
-            </span>
+            <div style={{ marginLeft: 10, display: "flex", alignItems: "center", gap: 6 }}>
+              <GitHubIcon size={14} color={theme.textMuted} />
+              <span style={{ color: theme.textMuted, fontSize: 14, fontFamily: theme.fontMono }}>
+                git diff
+              </span>
+            </div>
           </div>
 
           {/* Diff content */}
@@ -176,7 +187,7 @@ export const SyncAnimation: React.FC = () => {
           </span>
         </div>
 
-        {/* Output files */}
+        {/* Output files with real platform icons */}
         <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
           {outputFiles.map((file, i) => {
             const delay = 24 + i * 6;
@@ -212,7 +223,7 @@ export const SyncAnimation: React.FC = () => {
         </div>
       </div>
 
-      {/* Continuous sync bar */}
+      {/* Continuous sync bar with GitHub icon */}
       <div
         style={{
           position: "absolute",
@@ -237,6 +248,7 @@ export const SyncAnimation: React.FC = () => {
             boxShadow: `0 0 ${8 + loopPulse * 5}px ${theme.green}60`,
           }}
         />
+        <GitHubIcon size={20} color={theme.textSecondary} />
         <span style={{ color: theme.text, fontSize: 24, fontFamily: theme.fontSans, fontWeight: 600 }}>
           Every push. Every branch. Always in sync.
         </span>
