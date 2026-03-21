@@ -1,5 +1,5 @@
 <p align="center">
-  <video src="assets/demo-header.mp4" autoplay loop muted playsinline width="900"></video>
+  <img src="assets/demo-header.gif" alt="Caliber product demo" width="900">
 </p>
 
 <p align="center">

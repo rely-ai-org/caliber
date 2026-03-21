@@ -1,4 +1,4 @@
-import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
+import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { Logo } from "./Logo";
 import { theme } from "./theme";
 
@@ -11,18 +11,15 @@ const stats = [
 
 export const ROIStats: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   const headerOpacity = interpolate(frame, [0, 14], [0, 1], { extrapolateRight: "clamp" });
-  const ctaOpacity = interpolate(frame, [50, 68], [0, 1], { extrapolateRight: "clamp" });
-  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
+  const ctaOpacity = interpolate(frame, [45, 60], [0, 1], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill
       style={{
         justifyContent: "center",
         alignItems: "center",
-        background: `radial-gradient(ellipse 60% 50% at 50% 45%, ${theme.brand3}08, transparent)`,
       }}
     >
       <div
@@ -57,10 +54,17 @@ export const ROIStats: React.FC = () => {
 
       <div style={{ display: "flex", gap: 32, marginTop: 14 }}>
         {stats.map((stat, i) => {
-          const delay = 8 + i * 5;
-          const s = spring({ frame: frame - delay, fps, config: { damping: 14, stiffness: 65 } });
-          const counterProgress = spring({ frame: frame - delay - 3, fps, config: { damping: 20, mass: 0.6 } });
+          const delay = 6 + i * 5;
+          const opacity = interpolate(frame, [delay, delay + 10], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          });
 
+          // Simple linear counter
+          const counterProgress = interpolate(frame, [delay + 4, delay + 20], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          });
           const numericValue = parseInt(stat.value, 10);
           const isMultiplier = stat.value.includes("x");
           const displayNum = isNaN(numericValue) ? stat.value : Math.round(numericValue * counterProgress);
@@ -78,9 +82,7 @@ export const ROIStats: React.FC = () => {
                 border: `1px solid ${theme.surfaceBorder}`,
                 borderRadius: 20,
                 minWidth: 300,
-                opacity: s,
-                transform: `translateY(${interpolate(s, [0, 1], [24, 0])}px)`,
-                boxShadow: theme.cardGlow,
+                opacity,
               }}
             >
               <div
@@ -90,7 +92,6 @@ export const ROIStats: React.FC = () => {
                   borderRadius: 3,
                   backgroundColor: stat.color,
                   marginBottom: 24,
-                  boxShadow: `0 0 20px ${stat.color}40`,
                 }}
               />
               <div
@@ -164,7 +165,6 @@ export const ROIStats: React.FC = () => {
           <span style={{ color: theme.text, fontFamily: theme.fontMono, fontSize: 36, fontWeight: 500 }}>
             npx @rely-ai/caliber init
           </span>
-          <div style={{ width: 4, height: 36, backgroundColor: theme.brand3, opacity: cursorVisible ? 1 : 0, marginLeft: 6 }} />
         </div>
         <div style={{ fontSize: 30, fontFamily: theme.fontSans, color: theme.textSecondary, fontWeight: 400 }}>
           One command. Every AI agent. Always in sync.

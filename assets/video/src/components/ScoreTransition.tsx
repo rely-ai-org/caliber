@@ -1,4 +1,4 @@
-import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
+import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 
 function getScoreColor(score: number): string {
@@ -26,17 +26,20 @@ const categories = [
 
 export const ScoreTransition: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   const containerOpacity = interpolate(frame, [0, 12], [0, 1], { extrapolateRight: "clamp" });
-  const transitionProgress = spring({ frame: frame - 30, fps, config: { damping: 22, mass: 0.8 } });
-  const score = Math.round(interpolate(transitionProgress, [0, 1], [47, 94]));
-  const barWidth = interpolate(transitionProgress, [0, 1], [47, 94]);
+
+  // Linear counter from 47 to 94 over frames 25-55
+  const counterProgress = interpolate(frame, [25, 55], [0, 1], {
+    extrapolateLeft: "clamp",
+    extrapolateRight: "clamp",
+  });
+  const score = Math.round(interpolate(counterProgress, [0, 1], [47, 94]));
+  const barWidth = interpolate(counterProgress, [0, 1], [47, 94]);
   const scoreColor = getScoreColor(score);
   const grade = getGrade(score);
-  const glowIntensity = score >= 90 ? interpolate(frame, [65, 80], [0, 1], { extrapolateRight: "clamp" }) : 0;
-  const subtitleOpacity = interpolate(frame, [80, 100], [0, 1], { extrapolateRight: "clamp" });
-  const cursorVisible = Math.floor(frame / 15) % 2 === 0;
+  const glowIntensity = score >= 90 ? interpolate(frame, [58, 70], [0, 1], { extrapolateRight: "clamp" }) : 0;
+  const subtitleOpacity = interpolate(frame, [70, 88], [0, 1], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill
@@ -44,7 +47,6 @@ export const ScoreTransition: React.FC = () => {
         justifyContent: "center",
         alignItems: "center",
         opacity: containerOpacity,
-        background: `radial-gradient(ellipse 40% 40% at 50% 50%, ${scoreColor}08, transparent)`,
       }}
     >
       <div
@@ -53,7 +55,7 @@ export const ScoreTransition: React.FC = () => {
           borderRadius: 20,
           border: `1px solid ${theme.surfaceBorder}`,
           minWidth: 1100,
-          boxShadow: glowIntensity > 0 ? `0 0 100px -20px ${theme.green}25` : theme.terminalGlow,
+          boxShadow: glowIntensity > 0 ? `0 0 80px -20px ${theme.green}20` : theme.terminalGlow,
           overflow: "hidden",
         }}
       >
@@ -73,7 +75,6 @@ export const ScoreTransition: React.FC = () => {
           <span style={{ color: theme.textMuted, fontSize: 22, fontFamily: theme.fontMono, marginLeft: 16 }}>
             $ caliber score
           </span>
-          <div style={{ width: 12, height: 26, backgroundColor: theme.brand3, opacity: cursorVisible ? 1 : 0 }} />
         </div>
 
         <div style={{ padding: "48px 64px" }}>
@@ -124,20 +125,22 @@ export const ScoreTransition: React.FC = () => {
                 height: "100%",
                 backgroundColor: scoreColor,
                 borderRadius: 6,
-                boxShadow: `0 0 18px ${scoreColor}40`,
               }}
             />
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 44px" }}>
-            {categories.map((cat, i) => {
-              const catValue = Math.round(interpolate(transitionProgress, [0, 1], [cat.before, cat.after]));
+            {categories.map((cat) => {
+              const catValue = Math.round(interpolate(counterProgress, [0, 1], [cat.before, cat.after]));
               const catProgress = catValue / cat.max;
               const catColor = catProgress >= 0.8 ? theme.green : catProgress >= 0.5 ? theme.yellow : theme.red;
-              const catSpring = spring({ frame: frame - 34 - i * 3, fps, config: { damping: 14 } });
+              const catOpacity = interpolate(frame, [30, 42], [0, 1], {
+                extrapolateLeft: "clamp",
+                extrapolateRight: "clamp",
+              });
 
               return (
-                <div key={cat.label} style={{ display: "flex", alignItems: "center", gap: 16, opacity: catSpring }}>
+                <div key={cat.label} style={{ display: "flex", alignItems: "center", gap: 16, opacity: catOpacity }}>
                   <span style={{ color: theme.textSecondary, fontSize: 28, fontFamily: theme.fontSans, minWidth: 200 }}>
                     {cat.label}
                   </span>

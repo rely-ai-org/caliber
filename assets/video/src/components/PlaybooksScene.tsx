@@ -1,37 +1,37 @@
-import { AbsoluteFill, useCurrentFrame, interpolate, spring, useVideoConfig } from "remotion";
+import { AbsoluteFill, useCurrentFrame, interpolate } from "remotion";
 import { theme } from "./theme";
 import { SkillsShIcon, AwesomeIcon, OpenSkillsIcon } from "./ToolIcons";
 
 const buildSteps = [
-  { frame: 20,  icon: "🔍", text: "Scanning Skills.sh registry...", color: theme.brand1, phase: "scan" },
-  { frame: 32,  icon: "🔍", text: "Scanning Awesome Claude Code...", color: theme.brand2, phase: "scan" },
-  { frame: 44,  icon: "🔍", text: "Scanning SkillsBench...", color: theme.green, phase: "scan" },
-  { frame: 58,  icon: "⚡", text: "Installed skill: add-api-route", color: theme.brand3, phase: "skill" },
-  { frame: 68,  icon: "⚡", text: "Installed skill: drizzle-migrate", color: theme.brand3, phase: "skill" },
-  { frame: 78,  icon: "⚡", text: "Installed skill: auth-middleware", color: theme.brand3, phase: "skill" },
-  { frame: 88,  icon: "⚡", text: "Installed skill: test-patterns", color: theme.brand3, phase: "skill" },
-  { frame: 102, icon: "📝", text: "Generated CLAUDE.md — 847 lines", color: theme.accent, phase: "config" },
-  { frame: 115, icon: "📝", text: "Generated .cursor/rules/ — 12 files", color: theme.accent, phase: "config" },
-  { frame: 128, icon: "📝", text: "Generated AGENTS.md + copilot-instructions", color: theme.accent, phase: "config" },
-  { frame: 140, icon: "🔌", text: "Added MCP: context7 — docs lookup", color: "#c4b5fd", phase: "mcp" },
-  { frame: 152, icon: "🔌", text: "Added MCP: postgres — database tools", color: "#c4b5fd", phase: "mcp" },
-  { frame: 168, icon: "🧠", text: "Created CALIBER_LEARNINGS.md — memory", color: theme.green, phase: "learn" },
-  { frame: 182, icon: "🧠", text: "Indexed 14 sessions → patterns extracted", color: theme.green, phase: "learn" },
-  { frame: 195, icon: "✓",  text: "Setup complete — 94/100 Grade A", color: theme.green, phase: "done" },
+  { frame: 20,  icon: "🔍", text: "Scanning Skills.sh registry...", color: theme.brand1 },
+  { frame: 30,  icon: "🔍", text: "Scanning Awesome Claude Code...", color: theme.brand2 },
+  { frame: 40,  icon: "🔍", text: "Scanning SkillsBench...", color: theme.green },
+  { frame: 55,  icon: "⚡", text: "Installed skill: add-api-route", color: theme.brand3 },
+  { frame: 65,  icon: "⚡", text: "Installed skill: drizzle-migrate", color: theme.brand3 },
+  { frame: 75,  icon: "⚡", text: "Installed skill: auth-middleware", color: theme.brand3 },
+  { frame: 85,  icon: "⚡", text: "Installed skill: test-patterns", color: theme.brand3 },
+  { frame: 100, icon: "📝", text: "Generated CLAUDE.md — 847 lines", color: theme.accent },
+  { frame: 112, icon: "📝", text: "Generated .cursor/rules/ — 12 files", color: theme.accent },
+  { frame: 124, icon: "📝", text: "Generated AGENTS.md + copilot-instructions", color: theme.accent },
+  { frame: 138, icon: "🔌", text: "Added MCP: context7 — docs lookup", color: "#c4b5fd" },
+  { frame: 150, icon: "🔌", text: "Added MCP: postgres — database tools", color: "#c4b5fd" },
+  { frame: 165, icon: "🧠", text: "Created CALIBER_LEARNINGS.md — memory", color: theme.green },
+  { frame: 178, icon: "🧠", text: "Indexed 14 sessions → patterns extracted", color: theme.green },
+  { frame: 192, icon: "✓",  text: "Setup complete — 94/100 Grade A", color: theme.green },
 ];
 
 const fileTree = [
-  { name: "CLAUDE.md", indent: 0, appearsAt: 102, status: "new" },
-  { name: ".cursor/", indent: 0, appearsAt: 115, status: "dir" },
-  { name: "rules/", indent: 1, appearsAt: 115, status: "dir" },
-  { name: "api-patterns.mdc", indent: 2, appearsAt: 117, status: "new" },
-  { name: "testing.mdc", indent: 2, appearsAt: 119, status: "new" },
-  { name: "security.mdc", indent: 2, appearsAt: 121, status: "new" },
-  { name: "AGENTS.md", indent: 0, appearsAt: 128, status: "new" },
-  { name: "copilot-instructions.md", indent: 0, appearsAt: 130, status: "new" },
-  { name: ".claude/", indent: 0, appearsAt: 140, status: "dir" },
-  { name: "settings.local.json", indent: 1, appearsAt: 142, status: "mcp" },
-  { name: "CALIBER_LEARNINGS.md", indent: 0, appearsAt: 168, status: "learn" },
+  { name: "CLAUDE.md", indent: 0, appearsAt: 100, status: "new" },
+  { name: ".cursor/", indent: 0, appearsAt: 112, status: "dir" },
+  { name: "rules/", indent: 1, appearsAt: 112, status: "dir" },
+  { name: "api-patterns.mdc", indent: 2, appearsAt: 114, status: "new" },
+  { name: "testing.mdc", indent: 2, appearsAt: 116, status: "new" },
+  { name: "security.mdc", indent: 2, appearsAt: 118, status: "new" },
+  { name: "AGENTS.md", indent: 0, appearsAt: 124, status: "new" },
+  { name: "copilot-instructions.md", indent: 0, appearsAt: 126, status: "new" },
+  { name: ".claude/", indent: 0, appearsAt: 138, status: "dir" },
+  { name: "settings.local.json", indent: 1, appearsAt: 140, status: "mcp" },
+  { name: "CALIBER_LEARNINGS.md", indent: 0, appearsAt: 165, status: "learn" },
 ];
 
 const registries = [
@@ -42,23 +42,19 @@ const registries = [
 
 export const PlaybooksScene: React.FC = () => {
   const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
 
   const headerOpacity = interpolate(frame, [0, 14], [0, 1], { extrapolateRight: "clamp" });
-  const cursorVisible = Math.floor(frame / 12) % 2 === 0;
 
-  const scrollOffset = frame > 120
-    ? interpolate(frame, [120, 195], [0, -220], { extrapolateRight: "clamp" })
+  const scrollOffset = frame > 110
+    ? interpolate(frame, [110, 192], [0, -200], { extrapolateRight: "clamp" })
     : 0;
 
-  const phaseLabel = frame < 55 ? "Scanning registries..."
-    : frame < 98 ? "Installing skills..."
-    : frame < 138 ? "Generating configs..."
-    : frame < 165 ? "Configuring MCPs..."
-    : frame < 195 ? "Building persistent memory..."
+  const phaseLabel = frame < 50 ? "Scanning registries..."
+    : frame < 95 ? "Installing skills..."
+    : frame < 135 ? "Generating configs..."
+    : frame < 162 ? "Configuring MCPs..."
+    : frame < 192 ? "Building persistent memory..."
     : "Setup complete!";
-
-  const phaseLabelOpacity = interpolate(frame, [16, 24], [0, 1], { extrapolateRight: "clamp" });
 
   return (
     <AbsoluteFill
@@ -66,7 +62,6 @@ export const PlaybooksScene: React.FC = () => {
         justifyContent: "flex-start",
         alignItems: "center",
         paddingTop: 40,
-        background: `radial-gradient(ellipse 50% 40% at 40% 50%, ${theme.brand3}06, transparent)`,
       }}
     >
       <div
@@ -85,7 +80,10 @@ export const PlaybooksScene: React.FC = () => {
 
       <div style={{ display: "flex", gap: 20, marginBottom: 24, opacity: headerOpacity }}>
         {registries.map((reg, i) => {
-          const s = spring({ frame: frame - 4 - i * 3, fps, config: { damping: 14, stiffness: 90 } });
+          const opacity = interpolate(frame, [4 + i * 3, 10 + i * 3], [0, 1], {
+            extrapolateLeft: "clamp",
+            extrapolateRight: "clamp",
+          });
           return (
             <div
               key={reg.name}
@@ -97,7 +95,7 @@ export const PlaybooksScene: React.FC = () => {
                 borderRadius: 28,
                 backgroundColor: `${reg.color}12`,
                 border: `1px solid ${reg.color}25`,
-                opacity: s,
+                opacity,
               }}
             >
               <reg.Icon size={26} color={reg.color} />
@@ -137,15 +135,6 @@ export const PlaybooksScene: React.FC = () => {
             <span style={{ color: theme.textMuted, fontSize: 20, fontFamily: theme.fontMono, marginLeft: 14 }}>
               $ caliber init
             </span>
-            <div
-              style={{
-                width: 12,
-                height: 24,
-                backgroundColor: theme.brand3,
-                opacity: cursorVisible ? 1 : 0,
-                marginLeft: 4,
-              }}
-            />
           </div>
 
           <div style={{ padding: "20px 26px", overflow: "hidden", height: 520 }}>
@@ -155,8 +144,8 @@ export const PlaybooksScene: React.FC = () => {
                 fontFamily: theme.fontMono,
                 color: theme.brand2,
                 marginBottom: 14,
-                opacity: phaseLabelOpacity,
                 fontWeight: 600,
+                opacity: interpolate(frame, [16, 22], [0, 1], { extrapolateRight: "clamp" }),
               }}
             >
               {phaseLabel}
@@ -164,25 +153,7 @@ export const PlaybooksScene: React.FC = () => {
 
             <div style={{ transform: `translateY(${scrollOffset}px)` }}>
               {buildSteps.map((step, i) => {
-                const stepOpacity = interpolate(frame, [step.frame, step.frame + 6], [0, 1], {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                });
-                const stepX = interpolate(frame, [step.frame, step.frame + 8], [-14, 0], {
-                  extrapolateLeft: "clamp",
-                  extrapolateRight: "clamp",
-                });
-
-                const charCount = step.text.length;
-                const typedChars = Math.round(
-                  interpolate(frame, [step.frame, step.frame + Math.min(charCount * 0.4, 12)], [0, charCount], {
-                    extrapolateLeft: "clamp",
-                    extrapolateRight: "clamp",
-                  })
-                );
-                const displayText = step.text.substring(0, typedChars);
-
-                const checkOpacity = interpolate(frame, [step.frame + 10, step.frame + 14], [0, 1], {
+                const stepOpacity = interpolate(frame, [step.frame, step.frame + 5], [0, 1], {
                   extrapolateLeft: "clamp",
                   extrapolateRight: "clamp",
                 });
@@ -196,17 +167,26 @@ export const PlaybooksScene: React.FC = () => {
                       gap: 14,
                       marginBottom: 8,
                       opacity: stepOpacity,
-                      transform: `translateX(${stepX}px)`,
                       fontFamily: theme.fontMono,
                       fontSize: 22,
                       lineHeight: 1.7,
                     }}
                   >
                     <span style={{ width: 28, textAlign: "center", fontSize: 20 }}>{step.icon}</span>
-                    <span style={{ color: step.color }}>{displayText}</span>
-                    {step.phase !== "done" && (
-                      <span style={{ color: theme.green, opacity: checkOpacity, fontWeight: 700, fontSize: 20 }}>✓</span>
-                    )}
+                    <span style={{ color: step.color }}>{step.text}</span>
+                    <span
+                      style={{
+                        color: theme.green,
+                        fontWeight: 700,
+                        fontSize: 20,
+                        opacity: interpolate(frame, [step.frame + 6, step.frame + 10], [0, 1], {
+                          extrapolateLeft: "clamp",
+                          extrapolateRight: "clamp",
+                        }),
+                      }}
+                    >
+                      ✓
+                    </span>
                   </div>
                 );
               })}
@@ -222,7 +202,6 @@ export const PlaybooksScene: React.FC = () => {
             border: `1px solid ${theme.surfaceBorder}`,
             borderRadius: 20,
             overflow: "hidden",
-            boxShadow: theme.cardGlow,
           }}
         >
           <div
@@ -253,11 +232,7 @@ export const PlaybooksScene: React.FC = () => {
 
           <div style={{ padding: "16px 22px" }}>
             {fileTree.map((file, i) => {
-              const fileOpacity = interpolate(frame, [file.appearsAt, file.appearsAt + 6], [0, 1], {
-                extrapolateLeft: "clamp",
-                extrapolateRight: "clamp",
-              });
-              const fileX = interpolate(frame, [file.appearsAt, file.appearsAt + 8], [12, 0], {
+              const fileOpacity = interpolate(frame, [file.appearsAt, file.appearsAt + 5], [0, 1], {
                 extrapolateLeft: "clamp",
                 extrapolateRight: "clamp",
               });
@@ -283,7 +258,6 @@ export const PlaybooksScene: React.FC = () => {
                     paddingLeft: file.indent * 24,
                     marginBottom: 6,
                     opacity: fileOpacity,
-                    transform: `translateX(${fileX}px)`,
                     fontFamily: theme.fontMono,
                     fontSize: 20,
                     lineHeight: 1.8,
@@ -318,6 +292,7 @@ export const PlaybooksScene: React.FC = () => {
         </div>
       </div>
 
+      {/* Summary pills */}
       <div
         style={{
           position: "absolute",
@@ -325,7 +300,7 @@ export const PlaybooksScene: React.FC = () => {
           display: "flex",
           alignItems: "center",
           gap: 28,
-          opacity: interpolate(frame, [200, 215], [0, 1], { extrapolateRight: "clamp" }),
+          opacity: interpolate(frame, [198, 212], [0, 1], { extrapolateRight: "clamp" }),
         }}
       >
         {[
@@ -333,38 +308,32 @@ export const PlaybooksScene: React.FC = () => {
           { label: "5 Config files", color: theme.accent },
           { label: "2 MCPs", color: "#c4b5fd" },
           { label: "Persistent memory", color: theme.green },
-        ].map((item, i) => {
-          const s = spring({ frame: frame - 200 - i * 4, fps, config: { damping: 14, stiffness: 80 } });
-          return (
+        ].map((item) => (
+          <div
+            key={item.label}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 12,
+              padding: "14px 28px",
+              borderRadius: 32,
+              backgroundColor: `${item.color}10`,
+              border: `1px solid ${item.color}22`,
+            }}
+          >
             <div
-              key={item.label}
               style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                padding: "14px 28px",
-                borderRadius: 32,
-                backgroundColor: `${item.color}10`,
-                border: `1px solid ${item.color}22`,
-                opacity: s,
-                transform: `translateY(${interpolate(s, [0, 1], [12, 0])}px)`,
+                width: 12,
+                height: 12,
+                borderRadius: 6,
+                backgroundColor: item.color,
               }}
-            >
-              <div
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 6,
-                  backgroundColor: item.color,
-                  boxShadow: `0 0 10px ${item.color}40`,
-                }}
-              />
-              <span style={{ fontSize: 26, fontWeight: 600, fontFamily: theme.fontSans, color: item.color }}>
-                {item.label}
-              </span>
-            </div>
-          );
-        })}
+            />
+            <span style={{ fontSize: 26, fontWeight: 600, fontFamily: theme.fontSans, color: item.color }}>
+              {item.label}
+            </span>
+          </div>
+        ))}
       </div>
     </AbsoluteFill>
   );
